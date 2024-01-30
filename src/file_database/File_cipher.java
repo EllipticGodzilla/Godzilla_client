@@ -1,8 +1,8 @@
 package file_database;
 
+import gui.CentralTerminal_panel;
 import gui.StringVectorOperator;
 import gui.TempPanel;
-
 import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -12,10 +12,9 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.Vector;
-import java.util.concurrent.TimeUnit;
 
 public class File_cipher {
     private static Cipher encrypter = null;
@@ -30,7 +29,6 @@ public class File_cipher {
     }
 
     private static boolean is_empty(byte[] arr) { //se l'array contiene solo zero è considerato vuoto e ritorna true, altrimenti false
-        boolean is_empty = true;
         for (byte b : arr) {
             if (b != 0) {
                 return false;
@@ -41,7 +39,8 @@ public class File_cipher {
 
     private static StringVectorOperator psw_gen = new StringVectorOperator() {
         @Override
-        public void success() {
+        public void success() { //ha ricevuto una password per cifrare i file, la salva e inizia a cifrare i file utilizzando questa
+            if (Database.DEBUG) { CentralTerminal_panel.terminal_write("ricevuta password per i file, ", false); }
             try {
                 MessageDigest md = MessageDigest.getInstance("SHA3-512");
                 byte[] hash = md.digest(input.elementAt(0).getBytes());
@@ -52,6 +51,7 @@ public class File_cipher {
                         File_interface.FILE_CIPHER_KEY,
                         Base64.getEncoder().encodeToString(test_byte)
                 );
+                if (Database.DEBUG) { CentralTerminal_panel.terminal_write("salvata la password nel database, ", false); }
 
                 //utilizza i primi 32 byte dell'hash per key ed iv
                 byte[] key_bytes = Arrays.copyOf(hash, 16);
@@ -66,6 +66,7 @@ public class File_cipher {
 
                 encrypter.init(Cipher.ENCRYPT_MODE, key, iv);
                 decrypter.init(Cipher.DECRYPT_MODE, key, iv);
+                if (Database.DEBUG) { CentralTerminal_panel.terminal_write("inizializzati i cipher\n", false); }
 
                 File_interface.init_next();
 
@@ -93,6 +94,8 @@ public class File_cipher {
                 throw new RuntimeException(e);
             } catch (InstantiationException e) {
                 throw new RuntimeException(e);
+            } catch (InvalidKeySpecException e) {
+                throw new RuntimeException(e);
             }
         }
 
@@ -104,14 +107,16 @@ public class File_cipher {
 
     private static StringVectorOperator AES_init = new StringVectorOperator() {
         @Override
-        public void success() {
+        public void success() { //ha ricevuto un password, controlla sia giusta ed inizializza i cipher
             try {
+                if (Database.DEBUG) { CentralTerminal_panel.terminal_write("password ricevuta, ", false); }
                 MessageDigest md = MessageDigest.getInstance("SHA3-512");
                 byte[] hash = md.digest(input.elementAt(0).getBytes());
 
                 if (Arrays.compare(Arrays.copyOfRange(hash, 32, 64), Database.FileCypherKey_test) != 0) { //se la password inserita è sbagliata
                     fail();
                 } else {
+                    if (Database.DEBUG) { CentralTerminal_panel.terminal_write("password corretta, ", false); }
                     //utilizza i primi 32byte dell'hash come key ed iv per inizializzare AES
                     byte[] key_bytes = Arrays.copyOf(hash, 16);
                     byte[] iv_bytes = Arrays.copyOfRange(hash, 16, 32);
@@ -125,6 +130,7 @@ public class File_cipher {
 
                     encrypter.init(Cipher.ENCRYPT_MODE, key, iv);
                     decrypter.init(Cipher.DECRYPT_MODE, key, iv);
+                    if (Database.DEBUG) { CentralTerminal_panel.terminal_write("inizializzati i cipher\n", false); }
 
                     File_interface.init_next();
                 }
@@ -153,11 +159,14 @@ public class File_cipher {
                 throw new RuntimeException(e);
             } catch (InstantiationException e) {
                 throw new RuntimeException(e);
+            } catch (InvalidKeySpecException e) {
+                throw new RuntimeException(e);
             }
         }
 
         @Override
         public void fail() {
+            if (Database.DEBUG) { CentralTerminal_panel.terminal_write("la password inserita non è corretta, o è stato premuto cancella\n", true); }
             TempPanel.show_msg("password non corretta, riprovare", error_init, false);
         }
     };

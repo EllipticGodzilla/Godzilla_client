@@ -1,13 +1,16 @@
 package gui;
 
-import network.Connection;
+import file_database.Database;
 import network.Server;
+import network.Connection;
 import javax.swing.*;
 import javax.swing.plaf.basic.BasicScrollBarUI;
 import java.awt.*;
 import java.awt.event.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Vector;
 
 public abstract class Godzilla_frame {
@@ -19,14 +22,15 @@ public abstract class Godzilla_frame {
     private static JPanel temp_panel = null;
 
     //ricorda quali pannelli erano attivi prima di aprire una temp window in modo da riattivarli una volta chiusa
-    protected static final int SERVER_LIST = 0;
-    protected static final int CLIENT_LIST = 1;
-    protected static final int BUTTON_TOPBAR = 2;
+    public static final int SERVER_LIST = 0;
+    public static final int CLIENT_LIST = 1;
+    public static final int BUTTON_TOPBAR = 2;
 
-    private static boolean[] active = new boolean[]{true, false, false};
+    private static boolean active = true;
+    private static boolean[] active_panel = new boolean[] {true, false, false};
 
     //permette a tutti di comunicare con il server
-    protected static Server connected_server = null;
+    protected static Connection connected_server = null;
 
     private static JFrame godzilla_frame = null;
 
@@ -89,6 +93,7 @@ public abstract class Godzilla_frame {
             lp.add(temp_panel, JLayeredPane.POPUP_LAYER);
 
             godzilla_frame.setLayeredPane(lp);
+            godzilla_frame.setVisible(true);
 
             //mantiene TempPanel sempre al centro del frame
             godzilla_frame.addComponentListener(new ComponentListener() {
@@ -108,16 +113,40 @@ public abstract class Godzilla_frame {
         return godzilla_frame;
     }
 
+    public static void set_title(String title) {
+        Godzilla_frame.godzilla_frame.setTitle(title);
+    }
+
+    protected static boolean is_enabled(int panel) {
+        return active_panel[panel];
+    }
+
+    protected static boolean enabled() {
+        return active;
+    }
+
     protected static void disable_panels() { //disabilita tutti i pannelli quando si apre TempPanel
+        active = false;
+
         ServerList_panel.setEnabled(false);
         ClientList_panel.setEnabled(false);
         ButtonTopBar_panel.setEnabled(false);
     }
 
+    public static void disable_panel(int panel) {
+        active_panel[panel] = false;
+    }
+
+    public static void enable_panel(int panel) {
+        active_panel[panel] = true;
+    }
+
     protected static void enable_panels() { //riattiva i pannelli una volta chiusa TempPanel
-        ServerList_panel.setEnabled(active[SERVER_LIST]);
-        ClientList_panel.setEnabled(active[CLIENT_LIST]);
-        ButtonTopBar_panel.setEnabled(active[BUTTON_TOPBAR]);
+        active = true;
+
+        ServerList_panel.setEnabled(active_panel[SERVER_LIST]);
+        ClientList_panel.setEnabled(active_panel[CLIENT_LIST]);
+        ButtonTopBar_panel.setEnabled(active_panel[BUTTON_TOPBAR]);
     }
 
     protected static void recenter_temp_panel() {
@@ -128,8 +157,8 @@ public abstract class Godzilla_frame {
     }
 }
 
-class MyJScrollPane extends JScrollPane {
-    public MyJScrollPane(Component c) {
+class GScrollPane extends JScrollPane {
+    public GScrollPane(Component c) {
         super(c);
 
         this.setBorder(BorderFactory.createLineBorder(new Color(72, 74, 75)));
@@ -204,20 +233,21 @@ class MyJScrollPane extends JScrollPane {
 }
 
 /*
-* utilizzando un estensione di JList viene più semplice ma aggiungendo e rimuovendo elementi dalla lista in modo dinamico può provocare problemi grafici
+* utilizzando un estensione di JList viene più semplice ma aggiungere e rimuovere elementi dalla lista in modo dinamico può provocare problemi grafici
 * dove la lista viene mostrata vuota finché non le si dà un nuovo update, di conseguenza ho creato la mia versione di JList utilizzando varie JTextArea
 * e partendo da un JPanel.
 * Non so bene da che cosa sia dovuto il problema con JList ma sembra essere risolto utilizzando la mia versione
  */
-class MyJList extends JPanel {
-    private Vector<ListCell> list_elements = new Vector<>();
+class GList extends JPanel {
+    private Map<String, ListCell> elements = new LinkedHashMap<>();
     private int selected_index = -1;
 
-    private JTextArea filler = new JTextArea();
-    private GridBagConstraints c = new GridBagConstraints();
+    private JPanel list_panel = new JPanel(); //pannello che contiene tutte le JTextArea della lista
+    private JTextArea filler = new JTextArea(); //filler per rimepire lo spazio in basso
+
     private Constructor popupMenu = null;
 
-    public MyJList() {
+    public GList() {
         super();
         this.setLayout(new GridBagLayout());
 
@@ -227,79 +257,68 @@ class MyJList extends JPanel {
 
         filler.setBackground(this.getBackground());
         filler.setFocusable(false);
-        filler.setCursor(null);
+        filler.setEditable(false);
+
+        list_panel.setLayout(new GridBagLayout());
+        list_panel.setBackground(this.getBackground());
+
+        GridBagConstraints c = new GridBagConstraints();
 
         c.gridx = 0;
         c.gridy = 0;
         c.fill = GridBagConstraints.BOTH;
+        c.weighty = 0;
+        c.weightx = 1;
+        this.add(list_panel, c);
+
+        c.gridy = 1;
         c.weighty = 1;
         this.add(filler, c);
-
-        c.weighty = 0;
     }
 
     public void set_popup(Class PopupMenu) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
-        this.popupMenu = PopupMenu.getDeclaredConstructor(String.class, MyJList.class);
+        this.popupMenu = PopupMenu.getDeclaredConstructor(String.class, GList.class);
 
-        for (int i = 0; i < list_elements.size() - 1; i++) { //viene saltato il filler, che si trova sempre all'ultima posizione
-            list_elements.elementAt(i).setComponentPopupMenu((JPopupMenu) this.popupMenu.newInstance(list_elements.elementAt(i).getText(), this));
+        for (ListCell cell : elements.values()) {
+            cell.setComponentPopupMenu((JPopupMenu) this.popupMenu.newInstance(cell.getText(), this));
         }
     }
 
-    @Override
-    public void setBounds(int x, int y, int width, int height) {
-        super.setBounds(x, y, width, height);
-
-        filler.setPreferredSize(new Dimension(width, 0));
-    }
-
-    public void add(String name) throws InvocationTargetException, InstantiationException, IllegalAccessException {
-        list_elements.add(new ListCell(name, this, list_elements.size()));
+    public void add(String name) throws InvocationTargetException, InstantiationException, IllegalAccessException { //aggiunge una nuova casella nell'ultima posizione
+        ListCell cell = new ListCell(name, this, elements.size());
+        elements.put(name, cell);
         if (this.popupMenu != null) {
-            list_elements.lastElement().setComponentPopupMenu((JPopupMenu) this.popupMenu.newInstance(name, this));
+            cell.setComponentPopupMenu((JPopupMenu) this.popupMenu.newInstance(name, this));
         }
 
-        //rimuove il filler
-        this.remove(filler);
+        GridBagConstraints c = new GridBagConstraints();
 
-        //aggiunge la nuova ListCell
-        this.add(list_elements.lastElement(), c);
+        c.weightx = 1;
+        c.weighty = 0;
+        c.fill = GridBagConstraints.BOTH;
+        c.gridy = elements.size() - 1;
+        c.gridx = 0;
 
-        //aggiunge il filler
-        this.c.gridy += 1;
-        this.c.weighty = 1;
-        this.add(filler, c);
+        list_panel.add(cell, c);
 
-        //resetta this.c
-        this.c.weighty = 0;
-
-        //mostra il pulsante in più
-        this.updateUI();
+        this.updateUI(); //aggiorna la gui
     }
 
     public void remove(String name) {
-        ListCell name_cell = null;
-        for (ListCell cell : list_elements) {
-            if (cell.getText().equals(name)) {
-                name_cell = cell;
-                break;
-            }
+        ListCell cell = elements.get(name);
+
+        elements.remove(name); //rimuove la cella dalla lista
+        list_panel.remove(cell); //rimuove la casella dalla lista
+
+        if (cell.my_index == selected_index) { //se questa casella era selezionata
+            selected_index = -1;
         }
 
-        if (name_cell != null) { //se è stato trovato una cella con quella scritta
-            list_elements.remove(name_cell);
-            this.remove(name_cell);
-
-            if (name_cell.my_index == selected_index) { //se era selezionata in questo momento
-                selected_index = -1;
-            }
-        } else {
-            throw new RuntimeException("impossibile eliminare l'elemento con nome " + name + ", non è stato trovato");
-        }
+        this.updateUI(); //aggiorna la gui
     }
 
     public void rename_element(String old_name, String new_name) {
-        for (ListCell cell : list_elements) {
+        for (ListCell cell : elements.values()) {
             if (cell.getText().equals(old_name)) {
                 cell.setText(new_name);
                 break;
@@ -308,11 +327,20 @@ class MyJList extends JPanel {
     }
 
     public String getSelectedValue() {
-        try {
-            return list_elements.elementAt(selected_index).getText();
-        } catch (Exception e) { //non è selezionato nessun elemento
+        if (selected_index == -1) { //se non è selezionata nessuna casella
             return "";
         }
+        else {
+            return ((ListCell) list_panel.getComponent(selected_index)).getText();
+        }
+    }
+
+    public void reset_list() {
+        elements = new LinkedHashMap<>();
+        list_panel.removeAll();
+        this.repaint();
+
+        selected_index = -1;
     }
 
     class ListCell extends JTextArea {
@@ -320,10 +348,10 @@ class MyJList extends JPanel {
         private static final Color SEL_BACKGROUND = new Color(116, 121, 125);
         private static final Color SEL_BORDER = new Color(72, 74, 75);
 
-        private final MyJList PARENT_LIST;
+        private final GList PARENT_LIST;
         private int my_index;
 
-        public ListCell(String text, MyJList list, int index) {
+        public ListCell(String text, GList list, int index) {
             super(text);
             this.PARENT_LIST = list;
             this.my_index = index;
@@ -353,15 +381,19 @@ class MyJList extends JPanel {
                 switch (e.getKeyCode()) {
                     case 40: //freccia in basso
                         try {
-                            PARENT_LIST.list_elements.elementAt(my_index + 1).set_selected();
-                            PARENT_LIST.list_elements.elementAt(my_index + 1).requestFocus();
+                            ListCell next_cell = (ListCell) PARENT_LIST.list_panel.getComponent(my_index + 1);
+
+                            next_cell.set_selected();
+                            next_cell.requestFocus();
                         } catch (Exception ex) {} //se non esiste un elemento ad index my_index + 1
                         break;
 
                     case 38: //freccia in alto
                         try {
-                            PARENT_LIST.list_elements.elementAt(my_index - 1).set_selected();
-                            PARENT_LIST.list_elements.elementAt(my_index - 1).requestFocus();
+                            ListCell prev_cell = (ListCell) PARENT_LIST.list_panel.getComponent(my_index - 1);
+
+                            prev_cell.set_selected();
+                            prev_cell.requestFocus();
                         } catch (Exception ex) {} //se non esiste un elemento ad index my_index - 1
                         break;
 
@@ -370,7 +402,7 @@ class MyJList extends JPanel {
                         break;
 
                     case 10: //invio, si collega a questo server
-                        Connection.start_connection_with(getText());
+                        Server.start_connection_with(Database.serverList.get(getText()));
                         break;
                 }
             }
@@ -393,18 +425,20 @@ class MyJList extends JPanel {
         };
 
         public void set_selected() {
-            //deseleziona la casella selezionata in precedenza, se ne era selezionata una
-            if (PARENT_LIST.selected_index != -1) {
-                PARENT_LIST.list_elements.elementAt(PARENT_LIST.selected_index).unselect();
+            if (PARENT_LIST.selected_index != my_index) {
+                //deseleziona la casella selezionata in precedenza, se ne era selezionata una
+                if (PARENT_LIST.selected_index != -1) {
+                    ((ListCell) PARENT_LIST.list_panel.getComponent(PARENT_LIST.selected_index)).unselect();
+                }
+
+                //imposta questa JTextArea come selezionata
+                setBackground(SEL_BACKGROUND);
+                setBorder(BorderFactory.createLineBorder(SEL_BORDER));
+                setCaretColor(SEL_BACKGROUND);
+                setSelectionColor(SEL_BACKGROUND);
+
+                PARENT_LIST.selected_index = my_index;
             }
-
-            //imposta questa JTextArea come selezionata
-            setBackground(SEL_BACKGROUND);
-            setBorder(BorderFactory.createLineBorder(SEL_BORDER));
-            setCaretColor(SEL_BACKGROUND);
-            setSelectionColor(SEL_BACKGROUND);
-
-            PARENT_LIST.selected_index = my_index;
         }
 
         public void unselect() {
@@ -415,7 +449,6 @@ class MyJList extends JPanel {
 
             PARENT_LIST.selected_index = -1;
         }
-
     }
 }
 

@@ -2,6 +2,7 @@ package gui;
 
 import file_database.Database;
 import network.Connection;
+import network.Server;
 
 import javax.swing.*;
 import java.awt.*;
@@ -10,12 +11,12 @@ import java.awt.event.ActionListener;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Vector;
 
-public abstract class ServerList_panel implements Database {
+public abstract class ServerList_panel extends Database {
 
     private static JButton connect;
     private static JButton disconnect;
     private static JButton add_server;
-    private static MyJList server_list; //rispetto a JList viene modificata la grafica ed inserito un popup per rinominare ed eliminare server dalla lista
+    private static GList server_list; //rispetto a JList viene modificata la grafica ed inserito un popup per rinominare ed eliminare server dalla lista
 
     private static JPanel serverL_panel = null;
     protected static JPanel init() throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
@@ -27,9 +28,11 @@ public abstract class ServerList_panel implements Database {
             connect = new JButton();
             disconnect = new JButton();
             add_server = new JButton();
-            server_list = new MyJList();
-            MyJScrollPane server_scroller = new MyJScrollPane(server_list); //rispetto a JScrollPane viene modificata la grafica
+            server_list = new GList();
+            GScrollPane server_scroller = new GScrollPane(server_list); //rispetto a JScrollPane viene modificata la grafica
             JTextArea filler = new JTextArea();
+
+            disconnect.setEnabled(false);
 
             server_scroller.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 
@@ -45,18 +48,18 @@ public abstract class ServerList_panel implements Database {
             add_server.setBorder(null);
             filler.setBorder(null);
 
-            connect.setIcon(new ImageIcon(project_path + "images/power_on.png"));
-            connect.setRolloverIcon(new ImageIcon(project_path + "images/power_on_sel.png"));
-            connect.setPressedIcon(new ImageIcon(project_path + "images/power_on_pres.png"));
-            connect.setDisabledIcon(new ImageIcon(project_path + "images/power_on_dis.png"));
-            disconnect.setIcon(new ImageIcon(project_path + "images/power_off.png"));
-            disconnect.setRolloverIcon(new ImageIcon(project_path + "images/power_off_sel.png"));
-            disconnect.setPressedIcon(new ImageIcon(project_path + "images/power_off_pres.png"));
-            disconnect.setDisabledIcon(new ImageIcon(project_path + "images/power_off_dis.png"));
-            add_server.setIcon(new ImageIcon(project_path + "images/add_server.png"));
-            add_server.setRolloverIcon(new ImageIcon(project_path + "images/add_server_sel.png"));
-            add_server.setPressedIcon(new ImageIcon(project_path + "images/add_server_pres.png"));
-            add_server.setDisabledIcon(new ImageIcon(project_path + "images/add_server_dis.png"));
+            connect.setIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_on.png")));
+            connect.setRolloverIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_on_sel.png")));
+            connect.setPressedIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_on_pres.png")));
+            connect.setDisabledIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_on_dis.png")));
+            disconnect.setIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_off.png")));
+            disconnect.setRolloverIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_off_sel.png")));
+            disconnect.setPressedIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_off_pres.png")));
+            disconnect.setDisabledIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_off_dis.png")));
+            add_server.setIcon(new ImageIcon(ServerList_panel.class.getResource("/images/add_server.png")));
+            add_server.setRolloverIcon(new ImageIcon(ServerList_panel.class.getResource("/images/add_server_sel.png")));
+            add_server.setPressedIcon(new ImageIcon(ServerList_panel.class.getResource("/images/add_server_pres.png")));
+            add_server.setDisabledIcon(new ImageIcon(ServerList_panel.class.getResource("/images/add_server_dis.png")));
 
             connect.setPreferredSize(new Dimension(30, 30));
             disconnect.setPreferredSize(new Dimension(30, 30));
@@ -111,9 +114,13 @@ public abstract class ServerList_panel implements Database {
     }
 
     public static void setEnabled(boolean enabled) {
+        if (Connection.isClosed()) { //se non è connesso a nessun server il pulsante disconnect è disattivato, quindi non lo modifica qualsiasi sia il valore di enabled
+            connect.setEnabled(enabled);
+        }
+        else { //se è connesso ad un server il pulsante connect è disattivato, quindi non lo modifica qualsiasi sia il valore di enabled
+            disconnect.setEnabled(enabled);
+        }
         serverL_panel.setEnabled(enabled);
-        connect.setEnabled(enabled);
-        disconnect.setEnabled(enabled);
         add_server.setEnabled(enabled);
         server_list.setEnabled(enabled);
     }
@@ -121,6 +128,13 @@ public abstract class ServerList_panel implements Database {
     public static void update_gui() throws InvocationTargetException, InstantiationException, IllegalAccessException {
         for (String name : Database.serverList.keySet()) { //aggiunge alla lista tutti i server caricati sul database
             server_list.add(name);
+        }
+    }
+
+    public static void update_button() {
+        if (Godzilla_frame.enabled()) { //se i pulsanti dovrebbero essere attivi
+            connect.setEnabled(Connection.isClosed());
+            disconnect.setEnabled(!Connection.isClosed());
         }
     }
 
@@ -141,7 +155,7 @@ public abstract class ServerList_panel implements Database {
             public void success()  {
                 try {
                     if (ServerList_panel.is_valid(input.elementAt(0), false) && ServerList_panel.is_valid(input.elementAt(1), true)) {
-                        Database.serverList.put(input.elementAt(1), input.elementAt(0)); //aggiunge indirizzo e nome al database
+                        Database.serverList.put(input.elementAt(1), input.elementAt(0)); //aggiunge indirizzo e nome alla mappa serverList
                         server_list.add(input.elementAt(1)); //aggiunge il nome del server alla JList rendendolo visibile
                     } else {
                         TempPanel.show_msg("il nome o indirizzo inseriti non sono validi, inserire nome ed indirizzo validi", error_name_ip, false);
@@ -176,18 +190,21 @@ public abstract class ServerList_panel implements Database {
     }
 
     private static ActionListener connect_listener = e -> {
-        Connection.start_connection_with(Database.serverList.get(server_list.getSelectedValue()));
+        String link = Database.serverList.get(server_list.getSelectedValue());
+
+        CentralTerminal_panel.terminal_write("connessione con il server: " + link + "\n", false);
+        Server.start_connection_with(link);
     };
 
     private static ActionListener disconnect_listener = e -> {
-        Connection.disconnect();
+        Server.disconnect(true);
     };
 
     public static class CellPopupMenu extends JPopupMenu {
         private String cell_name;
-        private final MyJList PARENT_LIST;
+        private final GList PARENT_LIST;
 
-        public CellPopupMenu(String name, MyJList list) {
+        public CellPopupMenu(String name, GList list) {
             super();
             this.cell_name = name;
             this.PARENT_LIST = list;
@@ -218,6 +235,7 @@ public abstract class ServerList_panel implements Database {
             @Override
             public void success() {
                 if (is_valid(input.elementAt(0), true) && !input.elementAt(0).equals(cell_name)) {
+                    CentralTerminal_panel.terminal_write("rinomino il server \"" + cell_name + "\" in \"" + input.elementAt(0) + "\"\n", false);
                     PARENT_LIST.rename_element(cell_name, input.elementAt(0)); //modifica il nome nella lista visibile
 
                     Database.serverList.put( //modifica il nome nel database
@@ -253,6 +271,8 @@ public abstract class ServerList_panel implements Database {
         private StringVectorOperator remove_confirm = new StringVectorOperator() {
             @Override
             public void success() {
+                CentralTerminal_panel.terminal_write("rimuovo il server \"" + cell_name + "\"\n", false);
+
                 Database.serverList.remove(cell_name); //rimuove il server dal database
                 PARENT_LIST.remove(cell_name); //rimuove il server dalla lista visibile
             }

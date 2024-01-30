@@ -1,15 +1,24 @@
 package file_database;
 
 import gui.ButtonTopBar_panel;
+import gui.CentralTerminal_panel;
 import gui.ServerList_panel;
 import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 import java.io.*;
 import java.lang.reflect.InvocationTargetException;
+import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.regex.Pattern;
 
-public class File_interface implements Database {
+public class File_interface extends Database {
     private static final SecureFile FileCipherKey; //publico
     private static final SecureFile ServerList; //protetto
     private static final SecureFile TerminalLog; //publico
@@ -24,11 +33,11 @@ public class File_interface implements Database {
 
     static { //inizializza tutti i file
         try {
-            FileCipherKey = new SecureFile(project_path + "file_database/FileCipherKey.dat", false);
-            ServerList = new SecureFile(project_path + "network/ServerList.dat", true);
-            TerminalLog = new SecureFile(project_path + "gui/TerminalLog.dat", false);
-            MClientKey = new SecureFile(project_path + "network/MClientKey.dat", true);
-            CAPublicKey = new SecureFile(project_path + "network/CAPublicKey.dat", false);
+            FileCipherKey = new SecureFile(File_interface.class.getResource("FileCipherKey.dat").getPath(), false);
+            ServerList = new SecureFile(File_interface.class.getResource("/network/ServerList.dat").getPath(), true);
+            TerminalLog = new SecureFile(File_interface.class.getResource("/gui/TerminalLog.dat").getPath(), false);
+            MClientKey = new SecureFile(File_interface.class.getResource("/network/MClientKey.dat").getPath(), true);
+            CAPublicKey = new SecureFile(File_interface.class.getResource("/network/CAPublicKey.dat").getPath(), false);
         } catch (FileNotFoundException e) {
             throw new RuntimeException(e);
         }
@@ -41,41 +50,48 @@ public class File_interface implements Database {
     private static final int SERVER_LIST_DATABASE = 3;
     private static final int MASTER_CLIENT_KEY_IV_DATABASE = 4;
     private static final int UPDATE_GUI = 5;
-    public static void init_next() throws IllegalBlockSizeException, IOException, BadPaddingException, InterruptedException, InvocationTargetException, NoSuchMethodException, IllegalAccessException, InstantiationException {
+    public static void init_next() throws IllegalBlockSizeException, IOException, BadPaddingException, InterruptedException, InvocationTargetException, NoSuchMethodException, IllegalAccessException, InstantiationException, NoSuchAlgorithmException, InvalidKeySpecException, NoSuchPaddingException, InvalidKeyException {
         init_index += 1;
 
         switch (init_index - 1) {
             case FILE_CIPHER_DATABASE:
+                if (Database.DEBUG) { CentralTerminal_panel.terminal_write("leggo il file cipher key\n", false); }
                 init_file_cipher_key();
                 break;
 
             case FILE_CIPHER:
+                if (Database.DEBUG) { CentralTerminal_panel.terminal_write("chiedo la password per decifrare i database\n", false); }
                 File_cipher.init();
                 break;
 
             case CA_PUBLIC_KEY_DATABASE:
+                if (Database.DEBUG) { CentralTerminal_panel.terminal_write("leggo il file con la chiave pubblica della CA\n", false); }
                 init_ca_public_key();
                 break;
 
             case SERVER_LIST_DATABASE:
+                if (Database.DEBUG) { CentralTerminal_panel.terminal_write("leggo il file contenente la server list\n", false); }
                 init_server_list();
                 break;
 
             case MASTER_CLIENT_KEY_IV_DATABASE:
+                if (Database.DEBUG) { CentralTerminal_panel.terminal_write("leggo il file con le credeziali per i collegamenti \"master\"\n", false); }
                 init_master_client_key_iv();
                 break;
 
             case UPDATE_GUI:
+                if (Database.DEBUG) { CentralTerminal_panel.terminal_write("aggiorno la gui con le informazioni dei database\n", false); }
                 ServerList_panel.update_gui();
                 ButtonTopBar_panel.init_buttons();
                 break;
 
             default:
+                CentralTerminal_panel.terminal_write("non ho idea di come sia possibile, ma è stato chiamato init_next troppe volte\n", false);
                 throw new RuntimeException("impossibile inizializzare il prossimo passaggio, index = " + init_index);
         }
     }
 
-    private static void init_file_cipher_key() throws IllegalBlockSizeException, IOException, BadPaddingException, InterruptedException, InvocationTargetException, NoSuchMethodException, IllegalAccessException, InstantiationException {
+    private static void init_file_cipher_key() throws IllegalBlockSizeException, IOException, BadPaddingException, InterruptedException, InvocationTargetException, NoSuchMethodException, IllegalAccessException, InstantiationException, NoSuchAlgorithmException, InvalidKeySpecException, NoSuchPaddingException, InvalidKeyException {
         byte[] key_test = Base64.getDecoder().decode(FileCipherKey.read()); //copia i 32 byte per testare la validità della key inserita nel database
         for (int i = 0; i < key_test.length; i++) {
             FileCypherKey_test[i] = key_test[i];
@@ -84,16 +100,19 @@ public class File_interface implements Database {
         init_next();
     }
 
-    private static void init_ca_public_key() throws IllegalBlockSizeException, IOException, BadPaddingException, InterruptedException, InvocationTargetException, NoSuchMethodException, IllegalAccessException, InstantiationException {
-        byte[] ca_key = CAPublicKey.read(); //copia la pubblic key della CA nel database
-        for (int i = 0; i < ca_key.length; i++) {
-            Database.CAPublicKey[i] = ca_key[i];
-        }
+    private static void init_ca_public_key() throws IllegalBlockSizeException, IOException, BadPaddingException, InterruptedException, InvocationTargetException, NoSuchMethodException, IllegalAccessException, InstantiationException, NoSuchAlgorithmException, InvalidKeySpecException, NoSuchPaddingException, InvalidKeyException {
+        byte[] ca_key = CAPublicKey.read(); //copia la public key della CA nel database
+
+        KeyFactory kf = KeyFactory.getInstance("RSA");
+        PublicKey key = kf.generatePublic(new X509EncodedKeySpec(ca_key));
+
+        Database.CAPublicKey = Cipher.getInstance("RSA");
+        Database.CAPublicKey.init(Cipher.DECRYPT_MODE, key);
 
         init_next();
     }
 
-    private static void init_server_list() throws IllegalBlockSizeException, IOException, BadPaddingException, InterruptedException, InvocationTargetException, NoSuchMethodException, IllegalAccessException, InstantiationException {
+    private static void init_server_list() throws IllegalBlockSizeException, IOException, BadPaddingException, InterruptedException, InvocationTargetException, NoSuchMethodException, IllegalAccessException, InstantiationException, NoSuchAlgorithmException, InvalidKeySpecException, NoSuchPaddingException, InvalidKeyException {
         /*
          * il testo è formattato in questo modo:
          * <nome1>;<indirizzo1>
@@ -110,14 +129,15 @@ public class File_interface implements Database {
         Pattern p = Pattern.compile("[;\n]");
         String[] info = p.split(server_list);
 
-        for (int i = 0; i < info.length; i += 2) {
-            Database.serverList.put(info[i], info[i+1]);
+        if (info.length != 1) { //il file è vuoto, Pattern.split("") ritorna un array con un solo elemento vuoto
+            for (int i = 0; i < info.length; i += 2) {
+                Database.serverList.put(info[i], info[i + 1]);
+            }
+            init_next();
         }
-
-        init_next();
     }
 
-    private static void init_master_client_key_iv() throws IllegalBlockSizeException, IOException, BadPaddingException, InterruptedException, InvocationTargetException, NoSuchMethodException, IllegalAccessException, InstantiationException {
+    private static void init_master_client_key_iv() throws IllegalBlockSizeException, IOException, BadPaddingException, InterruptedException, InvocationTargetException, NoSuchMethodException, IllegalAccessException, InstantiationException, NoSuchAlgorithmException, InvalidKeySpecException, NoSuchPaddingException, InvalidKeyException {
         /*
         * il testo nel file è formattato in questo modo:
         * <indirizzo1>\00{<key1>\00;<iv1>\00}

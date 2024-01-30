@@ -1,10 +1,10 @@
 package gui;
 
+import file_database.Database;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.Vector;
-import java.util.concurrent.TimeUnit;
 
 abstract public class TempPanel {
     private static JButton ok_button = new JButton();
@@ -12,14 +12,6 @@ abstract public class TempPanel {
 
     public static Vector<JTextArea> input_array = new Vector<>();
     private static StringVectorOperator action = null;
-
-    /*
-    * Vector<String> = input txt
-    * StrignVectorOperator = action
-    * Integer = 0/1,
-    *   0, messaggio
-    *   1, richiesta di input
-     */
     private static Vector<Triple<Vector<String>, StringVectorOperator, Integer>> queue = new Vector<>();
     private static final int MESSAGE = 0;
     private static final int TA_MESSAGE = 1;
@@ -47,6 +39,23 @@ abstract public class TempPanel {
 
             ok_button.setBorder(null);
             annulla_button.setBorder(null);
+
+            ok_button.addKeyListener(new KeyListener() {
+                @Override
+                public void keyTyped(KeyEvent e) {}
+                @Override
+                public void keyReleased(KeyEvent e) {}
+
+                @Override
+                public void keyPressed(KeyEvent e) {
+                    if (e.getKeyCode() == 10) { //se viene premuto invio è come premere ok
+                        ok_button.doClick();
+                    } else if (annulla_button.isVisible() && e.getKeyCode() == 27) { //se viene premuto esc è come premere annulla
+                        System.out.println(annulla_button.isVisible());
+                        annulla_button.doClick();
+                    }
+                }
+            });
         }
         return temp_panel;
     }
@@ -58,6 +67,8 @@ abstract public class TempPanel {
             input_array.removeElementAt(0);
         }
 
+        reset(); //resetta tutta la grafica e fa partire il prossimo in coda
+
         if (action != null) { //se è stata specificata un azione
             if (type == MESSAGE || (type == INPUT && valid_input())) {
                 action.input.removeAllElements();
@@ -67,19 +78,16 @@ abstract public class TempPanel {
                 new Thread(() -> action.fail()).start();
             }
         }
-
-        //resetta tutto come nuovo
-        reset();
     };
 
     private static ActionListener annulla_listener = e ->  {
         input_array.removeAllElements(); //rimuove tutti gli input precedenti
 
+        reset(); //resetta tutta la grafica e fa partire il prossimo in coda
+
         if (action != null) {
             new Thread(() -> action.fail()).start();
         }
-
-        reset(); //resetta il pannello
     };
 
     public static void show_msg(String msg) {
@@ -108,6 +116,8 @@ abstract public class TempPanel {
                 c.insets = new Insets(5, 10, 10, 5);
                 c.anchor = GridBagConstraints.LAST_LINE_START;
                 temp_panel.add(annulla_button, c);
+            } else {
+                annulla_button.setVisible(false);
             }
 
             c.anchor = GridBagConstraints.LAST_LINE_END;
@@ -129,6 +139,8 @@ abstract public class TempPanel {
             temp_panel.setVisible(true);
             temp_panel.updateUI();
             visible = true;
+
+            ok_button.requestFocus(); //richiede il focus, in modo che se premuto invio appena il popup compare equivale a premere "ok"
         } else {
             Vector<String> vec = new Vector<>(); //aggiunge alla coda questo messaggio
             vec.add(msg);
@@ -156,6 +168,8 @@ abstract public class TempPanel {
 
     public static void request_string(Vector<String> txt_vec, StringVectorOperator action) {
         if (!visible) {
+            CentralTerminal_panel.terminal_write("richiesta di un input: ", false);
+
             type = INPUT;
             TempPanel.action = action;
 
@@ -171,6 +185,7 @@ abstract public class TempPanel {
 
             int max_txt_width = 0;
             for (int i = 0; i < txt_vec.size(); i++) { //genera ed aggiunge a txt_panel tutte le JTextArea
+                CentralTerminal_panel.terminal_write(txt_vec.elementAt(i) + ", ", false);
                 input_array.add(new FocusTextArea(i));
 
                 JTextArea txt_area = new NofocusTextArea(txt_vec.elementAt(i));
@@ -192,6 +207,7 @@ abstract public class TempPanel {
                 c.insets = new Insets(10, 0, 0, 10);
 
             }
+            CentralTerminal_panel.terminal_write("\n", false);
 
             //definisce le misure di txt_panel
             int min_width = ok_button.getPreferredSize().width + annulla_button.getPreferredSize().width + 10;
@@ -236,9 +252,15 @@ abstract public class TempPanel {
             //richiede il focus nella prima input area
             input_array.elementAt(0).requestFocusInWindow();
         } else {
+            if (Database.DEBUG) {
+                CentralTerminal_panel.terminal_write("aggiungo alla queue la richiesta di input: ", false);
+                for (String reqest : txt_vec) {
+                    CentralTerminal_panel.terminal_write(reqest + ", ", false);
+                }
+                CentralTerminal_panel.terminal_write("\naction = " + action + "\n", false);
+            }
             //aggiunge alla coda questa richiesta
             queue.add(new Triple<>(txt_vec, action, INPUT));
-            System.out.println(queue.size());
         }
     }
 
@@ -256,12 +278,17 @@ abstract public class TempPanel {
     }
 
     private static void reset() {
+        if (Database.DEBUG) { CentralTerminal_panel.terminal_write("resetto temp panel - ", false); }
+
         //resetta il pannello e lo rende invisibile
+        visible = false;
+        annulla_button.setVisible(true);
         temp_panel.setVisible(false);
         temp_panel.removeAll();
 
-        visible = false;
         if (queue.size() != 0) {
+            if (Database.DEBUG) { CentralTerminal_panel.terminal_write("la coda non è vuota\n", false); }
+
             Vector<String> txt = queue.elementAt(0).el1;
             StringVectorOperator action = queue.elementAt(0).el2;
             int id = queue.elementAt(0).el3;
@@ -273,9 +300,10 @@ abstract public class TempPanel {
             } else if (id == TA_MESSAGE) {
                 show_msg(txt.elementAt(0), action, true);
             } else { //richiede un input
-                    request_string(txt, action);
+                request_string(txt, action);
             }
         } else {
+            if (Database.DEBUG) { CentralTerminal_panel.terminal_write("la coda è vuota\n", false); }
             Godzilla_frame.enable_panels();
         }
     }
@@ -326,17 +354,17 @@ abstract public class TempPanel {
                         ok_button.doClick(); //simula il tasto "ok"
                     }
                 }
+                else if (e.getKeyCode() == 27) { //27 -> esc
+                    annulla_button.doClick();
+                }
             }
             @Override
             public void keyTyped(KeyEvent e) {}
 
             @Override
             public void keyPressed(KeyEvent e) {}
-
         };
-
     }
-
 }
 
 class Triple <E1, E2, E3> {
