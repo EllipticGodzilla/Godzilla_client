@@ -4,7 +4,6 @@ import file_database.Database;
 import gui.*;
 
 import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -13,12 +12,12 @@ import java.lang.reflect.InvocationTargetException;
 import java.net.Socket;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
+import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Vector;
 
-public class Connection {
+public abstract class Connection {
     private static Socket sck;
     private static BufferedOutputStream output;
     private static BufferedInputStream input;
@@ -26,6 +25,7 @@ public class Connection {
     private static String paired_usr;
 
     private static AESCipher cipher = null;
+    private static SecureRandom random = new SecureRandom();
 
     private static boolean secure = false;
     private static boolean dynamic = false;
@@ -44,54 +44,92 @@ public class Connection {
         }
     }
 
-    public static synchronized void write(String msg, boolean reply) {
-        write(msg.getBytes(), reply);
+    public static synchronized void write(String msg) {
+        write(msg.getBytes());
     }
 
-    public static void send_mod_msg(String msg, boolean reply) {
-        write(((reply)? "r" : "n") + msg, false);
+    public static synchronized void write(byte[] msg) { //non si aspetta nessuna risposta e non invia una risposta
+        write(msg, null);
     }
 
-    public static synchronized void write(String msg, boolean reply, On_arrival action) {
-        write(msg.getBytes(), reply, action);
+    public static synchronized void write(byte[] msg, On_arrival action) { //non invia una risposta, e si aspetta una risposta
+        byte conv_code = (action == null)? 0x00 : register_conv(action);
+
+        write(conv_code, msg);
     }
 
-    public static synchronized void write(byte[] msg, boolean reply, On_arrival action) {
-        if (Receiver.wait_for_msg(action)) { //se riesce a impostare action come azione una volta ricevuta una risposta
-            write(msg, reply);
-        }
-        else { //se c'è già un azione per il prossimo messaggio ricevuto, aggiunge questo alla coda
-            Receiver.add_to_queue(new CQueue_el(msg, reply, action));
-        }
+    public static synchronized void write(byte conv_code, byte[] msg, On_arrival action) { //invia una risposta e si aspetta una risposta
+        //registra la nuova azione da eseguire una volta ricevuta la risposta
+        Receiver.new_conv(conv_code, action);
+        write(conv_code, msg); //invia la risposta
     }
 
-    public static void write(byte[] msg, boolean reply) {
+    public static synchronized void write(byte conv_code, byte[] msg) { //invia una risposta
         try {
             if (!isClosed()) { //se è effettivamente connesso a qualcuno
                 if (Database.DEBUG) {
                     CentralTerminal_panel.terminal_write("invio al server: (" + new String(msg) + ") " + ((secure) ? "secure\n" : "\n"), false);
                 }
 
-                byte[] msg_prefix = new byte[msg.length + 1];
-                msg_prefix[0] = (reply) ? (byte) 1 : (byte) 0;
-                System.arraycopy(msg, 0, msg_prefix, 1, msg.length);
+                byte[] msg_prefix = concat_array(new byte[] {conv_code}, msg); //concatena conv_code e msg[]
 
-                //se deve cifrare il messaggio
-                if (secure) {
-                    msg_prefix = cipher.encode(msg_prefix);
-                }
-
-                output.write(new byte[]{(byte) (msg_prefix.length & 0xff), (byte) ((msg_prefix.length >> 8) & 0xff)});
-                output.write(msg_prefix);
-
-                output.flush();
+                direct_write(msg_prefix); //se possibile cifra e invia il messaggio
             }
         } catch (IllegalBlockSizeException | IOException | BadPaddingException | InvalidAlgorithmParameterException | InvalidKeyException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public static String wait_for_string() {
+    //copia dei metodi write(...) per inviare messaggi dalle mod, l'unica differenza è che prima del messaggio viene aggiunto "<nome mod>:"
+    public static synchronized void mod_write(String msg) {
+        write(ButtonTopBar_panel.active_mod + ":" + msg);
+    }
+
+    public static synchronized void mod_write(byte[] msg) {
+        byte[] prefix = (ButtonTopBar_panel.active_mod + ":").getBytes();
+        prefix = concat_array(prefix, msg); //concatena i due array prefix[] e msg[]
+
+        write(prefix);
+    }
+
+    public static synchronized void mod_write(byte[] msg, On_arrival action) {
+        byte[] prefix = (ButtonTopBar_panel.active_mod + ":").getBytes();
+        prefix = concat_array(prefix, msg); //concatena i due array prefix[] e msg[]
+
+        write(prefix, action);
+    }
+
+    public static synchronized void mod_write(byte conv_code, byte[] msg) {
+        byte[] prefix = (ButtonTopBar_panel.active_mod + ":").getBytes();
+        prefix = concat_array(prefix, msg); //concatena i due array prefix[] e msg[]
+
+        write(conv_code, prefix);
+    }
+
+    public static synchronized void mod_write(byte conv_code, byte[] msg, On_arrival action) {
+        byte[] prefix = (ButtonTopBar_panel.active_mod + ":").getBytes();
+        prefix = concat_array(prefix, msg); //concatena i due array prefix[] e msg[]
+
+        write(conv_code, prefix, action);
+    }
+    //fine dei metodi per inviare messaggi dalle mod
+
+    public static void direct_write(String msg) throws InvalidAlgorithmParameterException, IllegalBlockSizeException, IOException, BadPaddingException, InvalidKeyException {
+        direct_write(msg.getBytes());
+    }
+
+    public static void direct_write(byte[] msg) throws IOException, InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException, InvalidKeyException {
+        if (secure) { //è una connessione sicura cifra il messaggio
+            msg = cipher.encode(msg);
+        }
+
+        output.write(new byte[]{(byte) (msg.length & 0xff), (byte) ((msg.length >> 8) & 0xff)}); //invia 2 byte che indicano la dimensione del messaggio
+        output.write(msg); //invia il messaggio
+
+        output.flush();
+    }
+
+    public static String wait_for_string() { //se non è una connessione dinamica, attende che venga inviata una stringa
         if (!dynamic) {
             return new String(wait_for_bytes());
         }
@@ -101,28 +139,28 @@ public class Connection {
         }
     }
 
-    public static byte[] wait_for_bytes() {
+    public static byte[] wait_for_bytes() { //se non è una connessione dinamica, attende che vengano inviati dei bytes
         if (!dynamic) {
             try {
                 if (Database.DEBUG) { CentralTerminal_panel.terminal_write("attendo per dei bytes: ", false); }
 
-                byte[] msg_size_byte = input.readNBytes(2);
-                int msg_len = (msg_size_byte[0] & 0Xff) | (msg_size_byte[1] << 8);
+                byte[] msg_size_byte = input.readNBytes(2); //legge la dimensione del messaggio che sta arrivando
+                int msg_len = (msg_size_byte[0] & 0Xff) | (msg_size_byte[1] << 8); //trasforma i due byte appena letti in un intero
 
-                byte[] msg = input.readNBytes(msg_len);
+                byte[] msg = input.readNBytes(msg_len); //legge il messaggio appena arrivato
 
-                if (secure) { //se deve decifrare il messaggio
+                if (secure) { //se può decifra il messaggio
                     msg = cipher.decode(msg);
                 }
 
                 if (Database.DEBUG) { CentralTerminal_panel.terminal_write("(" + new String(msg) + ")\n", false); }
 
-                return Arrays.copyOfRange(msg, 1, msg.length); //rimuove il primo byte essendo un indicatore per quando il receiver è in modalità dinamica
+                return msg; //se la connessione non è dinamica non viene aggiunto il byte conv_code quindi ritorna il messaggio così come è arrivato
             } catch (IOException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException | InvalidAlgorithmParameterException e) { //connessione con il server chiusa
                 throw new RuntimeException(e);
             }
         }
-        else {
+        else { //se la connessione è dinamica non si possono ricevere bytes in questo modo
             if (Database.DEBUG) { CentralTerminal_panel.terminal_write("wait_for_bytes() può essere utilizzato solamente quando la connessione non è dinamica!\n", true); }
             throw new RuntimeException("wait_for_bytes() is a only non-dynamic connection function!");
         }
@@ -162,7 +200,8 @@ public class Connection {
         paired_usr = null;
     }
 
-    public static void register_prefix(String mod_name, String prefix, Prefix_action action) {
+    //registra un nuovo prefisso per riconoscere i messaggi indirizzati ad una specifica mod (es "login" o "pair")
+    public static void register_prefix(String mod_name, String prefix, On_arrival action) {
         Receiver.register_prefix(mod_name, prefix, action);
     }
 
@@ -215,14 +254,31 @@ public class Connection {
     public static boolean isClosed() { //ritorna true se non si è mai connesso (sck == null) o se si è connesso ma è stato disconnesso (sck.isClosed())
         return sck == null || sck.isClosed();
     }
+
+    private static byte register_conv(On_arrival action) { //registra una nuova conversazione e ritorna il conv_code associato
+        byte[] conv_code = new byte[1];
+        do { //per evitare di avere conv_code duplicati o 0x00
+            random.nextBytes(conv_code); //genera un byte casuale che utilizzerà come conv_code
+        } while (conv_code[0] == 0x00 || !Receiver.new_conv(conv_code[0], action));
+
+        return conv_code[0];
+    }
+
+    private static byte[] concat_array(byte[] arr1, byte[] arr2) {
+        int arr1_len = arr1.length;
+
+        arr1 = Arrays.copyOf(arr1, arr1.length + arr2.length);
+        System.arraycopy(arr2, 0, arr1, arr1_len, arr2.length);
+
+        return arr1;
+    }
 }
 
 abstract class Receiver {
     private static BufferedInputStream input;
 
-    private static final int TIMER = 10000; //dopo 10s che attende una risposta dal server ma non la riceve chiude la connessione
-
-    private static Vector<CQueue_el> queue = new Vector<>();
+    private static Map<Byte, On_arrival> conv_map = new LinkedHashMap<>(); //memorizza tutte le conversazioni che ha aperto con il server
+    private static Map<String, Map<String, On_arrival>> mod_prefix = new LinkedHashMap<>(); //mappa con tutti i prefissi registrati dalle varie mod e le azioni a loro associate, divisi per mod
 
     private static String pairing_usr = "";
     private static boolean secure = false;
@@ -240,8 +296,12 @@ abstract class Receiver {
             throw new RuntimeException("non è stato inizializzato il receiver");
         }
         else if (reading == true){
-            throw new RuntimeException("already reading from a server");
+            throw new RuntimeException("sto già ascoltando da un server");
         }
+    }
+
+    public static boolean new_conv(byte conv_code, On_arrival action) {
+        return conv_map.putIfAbsent(conv_code, action) == null; // true se il conv_code non era già registrato, false se è un duplicato
     }
 
     public static boolean set_cipher(AESCipher cipher) {
@@ -258,40 +318,12 @@ abstract class Receiver {
 
     public static void stop() {
         input = null; //genera un errore nel thread reader e lo stoppa
+        conv_map = new LinkedHashMap<>(); //resetta le conversazioni
 
         //resetta tutte le variabili
         secure = false;
     }
 
-    protected static synchronized boolean wait_for_msg(On_arrival arrival) {
-        if (Receiver.arrival == null) { //se non sta attendendo già un messaggio
-            Receiver.arrival = arrival;
-            new Thread(timer).start();
-
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-
-    public static synchronized void add_to_queue(CQueue_el element) { //aggiunge un nuovo messaggio alla coda da inviare
-        queue.add(element);
-    }
-
-    private static void queue_next() { //invia il prossimo messaggio nella queue
-        if (queue.size() != 0) { //se c'è almeno un messaggio in coda
-            CQueue_el el = queue.get(0);
-            queue.remove(0);
-
-            arrival = el.get_action();
-            Connection.write(el.get_msg(), el.get_reply());
-        } else { //se la coda è vuota resetta arrival
-            arrival = null;
-        }
-    }
-
-    private static On_arrival arrival = null;
     private static boolean reading = false;
     private static Runnable reader = () -> {
         reading = true;
@@ -306,19 +338,16 @@ abstract class Receiver {
                     msg = cipher.decode(msg);
                 }
 
-                if (msg[0] == 0) { //il primo byte del messaggio = 0 indica che non è una risposta ma un nuovo comando dal server
-                    process_server_msg(Arrays.copyOfRange(msg, 1, msg.length));
-                } else { //il primo byte diverso da zero indica che è una risposta
-                    if (arrival != null) { //se qualcuno sta attendendo un messaggio dal server
-                        On_arrival c_arrival = arrival; //ricorda l'azione da eseguire per questo messaggio
-                        queue_next(); //fa partire il prossimo messaggio in queue
+                byte conv_code = msg[0]; //memorizza il codice della conversazione
+                msg = Arrays.copyOfRange(msg, 1, msg.length); //elimina il conv_code dal messaggio
 
-                        c_arrival.on_arrival(Arrays.copyOfRange(msg, 1, msg.length));
-                    } else {
-                        if (Database.DEBUG) {
-                            CentralTerminal_panel.terminal_write("non è stato specificato una azione ed è stata ricevuta una risposta dal server\n", true);
-                        }
-                    }
+                On_arrival conv_action = conv_map.get(conv_code); //ricava l'azione da eseguire per questa conversazione
+                if (conv_action == null) { //se non è registrata nessuna azione processa il messaggio normalmente
+                    process_msg(conv_code, msg);
+                }
+                else { //se è specificata un azione la esegue
+                    conv_map.remove(conv_code);
+                    conv_action.on_arrival(conv_code, msg);
                 }
             }
         } catch (Exception e) {
@@ -328,49 +357,42 @@ abstract class Receiver {
         reading = false;
     };
 
-    private static Runnable timer = () -> {
-        try {
-            String arriva_pos = arrival.toString();
-
-            Thread.sleep(TIMER * 1000);
-
-            if (arrival != null && arriva_pos.equals(arrival.toString())) { //se non è cambiato l'oggetto arrival, è sempre la stessa richiesta ed è scaduto il timer
-                On_arrival c_arrival = arrival;
-
-                queue_next(); //fa partire il prossimo messaggio in coda
-                c_arrival.timedout(); //timedout alla azione corrente
-            }
-        } catch (Exception e) { }
-    };
-
-    private static void process_server_msg(byte[] msg) throws InvocationTargetException, InstantiationException, IllegalAccessException {
+    private static void process_msg(byte conv_code, byte[] msg) throws InvocationTargetException, InstantiationException, IllegalAccessException {
         String msg_str = new String(msg);
 
         try {
             if (msg_str.equals("EOC") && !Connection.is_paired()) { //se il server si scollega
                 Server.disconnect(false);
-            } else if (msg_str.equals("EOC")) { //se il client a cui è appaiato si scollega
+            }
+            else if (msg_str.equals("EOC")) { //se il client a cui è appaiato si scollega
                 Connection.unpair(false);
-            } else if (msg_str.substring(0, 5).equals("pair:")) { //se è un messaggio per appaiarsi con un altro client
+            }
+            else if (msg_str.substring(0, 5).equals("pair:")) { //se è un messaggio per appaiarsi con un altro client
                 if (!Connection.is_paired()) { //se non è appaiato con nessuno
                     pairing_usr = msg_str.substring(5);
                     CentralTerminal_panel.terminal_write("l'utente " + pairing_usr + " ha chiesto di collegarsi\n", false);
+                    
+                    pair_act.conv_code = conv_code;
                     TempPanel.show_msg("l'utente " + pairing_usr + " ha chiesto di collegarsi", pair_act, true);
-                } else { //se è già appaiato con un client
+                }
+                else { //se è già appaiato con un client
                     if (Database.DEBUG) {
                         CentralTerminal_panel.terminal_write("l'utente " + pairing_usr + " ha tentato di collegarsi\n", true);
                     }
-                    Connection.write("\000", true); //rifiuta
+                    Connection.write(conv_code, "\000".getBytes()); //rifiuta
                 }
-            } else if (msg_str.substring(0, 7).equals("clList:")) { //riceve la lista aggiornata dei client collegati al server
+            }
+            else if (msg_str.substring(0, 7).equals("clList:")) { //riceve la lista aggiornata dei client collegati al server
                 String clients_list = msg_str.substring(7);
 
                 CentralTerminal_panel.terminal_write("lista aggiornata dei client connessi al server: " + clients_list + "\n", false);
                 ClientList_panel.update_client_list(clients_list);
-            } else if (!ButtonTopBar_panel.active_mod.equals("")) { //manage dei messaggi inviati fra le mod, se ce ne è una attiva
-                check_registered_prefix(ButtonTopBar_panel.active_mod, msg_str, msg);
-            } else {
-                CentralTerminal_panel.terminal_write("è stato ricevuto dal server (" + msg_str + ") non è riconosciuto\n", true);
+            }
+            else if (!ButtonTopBar_panel.active_mod.equals("")) { //manage dei messaggi inviati fra le mod, se ce ne è una attiva
+                check_registered_prefix(ButtonTopBar_panel.active_mod, conv_code, msg_str, msg);
+            }
+            else {
+                CentralTerminal_panel.terminal_write("è stato ricevuto dal server (" + msg_str + ") non riconosciuto\n", true);
             }
         }
         catch (StringIndexOutOfBoundsException e) { //è stato ricevuto un messaggio non riconosciuto
@@ -378,58 +400,56 @@ abstract class Receiver {
         }
     }
 
-    private static void check_registered_prefix(String mod_name, String msg_str, byte[] msg) {
-        Map<String, Prefix_action> prefix = mod_prefix.get(mod_name); //trova la mappa con tutti i prefissi registrati dalla mod attiva in questo momento
+    private static void check_registered_prefix(String active_mod, byte conv_code, String msg_str, byte[] msg) { //msg = <mod name>:<prefix>:<msg>
+        String[] msg_split = msg_str.split(":");
+        if (msg_split[0].equals(active_mod)) { //se la mod per cui è riferito il messaggio è quella attiva in questo momento
+            Map<String, On_arrival> prefix = mod_prefix.get(active_mod); //trova la mappa con tutti i prefissi registrati dalla mod attiva in questo momento
 
-        //elimina tutti gli "header" con le informazioni necessarie all'invio del messaggio, e ricava solo il contenuto
-        String msg_prefix = msg_str.split(":")[0];
-        String msg_body_str = msg_str.substring(msg_prefix.length() + 1);
-        byte[] msg_body_byte = Arrays.copyOfRange(msg, msg_prefix.length() + 1, msg.length);
+            //elimina il prefisso dal messaggio
+            String msg_prefix = msg_split[1]; //ricava il prefisso registrato da questa mod
+            byte[] msg_body_byte = Arrays.copyOfRange(msg, active_mod.length() + msg_prefix.length() + 2, msg.length); //ricava il corpo del messaggio in forma di byte[]
 
-        Prefix_action action = prefix.get(msg_prefix);
-        if (action != null) { //se è stato registrato questo prefisso
-            action.start(msg_body_str, msg_body_byte);
-        } else { //se questo prefisso non è stato registrato da questa mod
-            CentralTerminal_panel.terminal_write("è stato ricevuto dal server (" + msg_str + ") non è stato registrato il prefisso dalla mod (" + ButtonTopBar_panel.active_mod + ")\n", true);
+            On_arrival action = prefix.get(msg_prefix); //cerca l'azione da eseguire associata a questo prefisso
+            if (action != null) { //se questo prefisso è stato registrato ed ha trovato l'azione associata
+                action.on_arrival(conv_code, msg_body_byte);
+            }
+            else {
+                CentralTerminal_panel.terminal_write("è stato ricevuto dal server (" + msg_str + ") non è stato registrato il prefisso dalla mod (" + ButtonTopBar_panel.active_mod + ")\n", true);
+            }
+        }
+        else {
+            CentralTerminal_panel.terminal_write("è stato ricevuto un messaggio per la mod (" + msg_split[0] + ") che non è attiva\n", true);
         }
     }
 
-    private static StringVectorOperator pair_act = new StringVectorOperator() {
+    private static PairingOperator pair_act = new PairingOperator() { //quando viene premuto "ok" o "cancella" nella temp panel
         @Override
         public synchronized void success() { //connessione accettata
             if (Database.DEBUG) { CentralTerminal_panel.terminal_write("accettata la connessione con il client\n", false); }
 
-            Connection.write("\001", true, pairing_check);
+            Connection.write(conv_code, "\001".getBytes(), pairing_check);
         }
 
         @Override
         public synchronized void fail() { //connessione rifiutata
             if (Database.DEBUG) { CentralTerminal_panel.terminal_write("rifiutata la connessione con il client\n", false); }
-            Connection.write("\000", true);
+
+            Connection.write(conv_code, "\000".getBytes());
         }
 
-        private On_arrival pairing_check = new On_arrival() {
-            @Override
-            public void on_arrival(byte[] msg) {
-                if (msg[0] == 1) {
-                    Connection.pair(pairing_usr);
-                }
-            }
-
-            @Override
-            public void timedout() throws IOException { //qualcosa è andato storto, l'appaiamento è annullato
-                CentralTerminal_panel.terminal_write("non è stata ricevuta una risposta positiva dal server, appaiamento annullato\n", true);
+        //attende una conferma dell'appaiamento dal server
+        private On_arrival pairing_check = (conv_code, msg) -> {
+            if (msg[0] == 1) {
+                Connection.pair(pairing_usr);
             }
         };
     };
 
     public static void unpair() {
-        Connection.write("EOC", false);
+        Connection.write("EOC");
     }
-
-    private static Map<String, Map<String, Prefix_action>> mod_prefix = new LinkedHashMap<>();
-    public static void register_prefix(String mod_name, String pref, Prefix_action action) { //registra un prefisso per i messaggi ricevuti dal server
-        Map<String, Prefix_action> prefix_map = mod_prefix.get(mod_name);
+    public static void register_prefix(String mod_name, String pref, On_arrival action) { //registra un prefisso per i messaggi ricevuti dal server
+        Map<String, On_arrival> prefix_map = mod_prefix.get(mod_name);
 
         if (prefix_map != null) { //se questa mod ha già altri prefissi registrati
             if (!prefix_map.containsKey(pref)) { //se non contiene già questo prefisso
@@ -447,4 +467,13 @@ abstract class Receiver {
             prefix_map.put(pref, action);
         }
     }
+}
+
+class PairingOperator implements StringVectorOperator {
+    public byte conv_code = 0x00;
+
+    @Override
+    public void success() {}
+    @Override
+    public void fail() {}
 }

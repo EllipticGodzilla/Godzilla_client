@@ -4,7 +4,6 @@ import file_database.Database;
 import gui.*;
 
 import javax.crypto.*;
-import javax.crypto.spec.IvParameterSpec;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.UnknownHostException;
@@ -13,7 +12,6 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.Random;
 import java.util.Vector;
 import java.util.regex.Pattern;
 
@@ -112,9 +110,9 @@ public abstract class Server {
         }
     }
 
-    public static String get_from_dns(char prefix, String msg) throws IOException, IllegalBlockSizeException, BadPaddingException {
+    public static String get_from_dns(char prefix, String msg) throws IOException, IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException, InvalidKeyException {
         Connection.init(CA_DNS_IP, CA_DNS_PORT);
-        Connection.write(prefix + msg, false); //aggiungendo d all'inizio specifichi al dns che vuoi conoscere l'indirizzo ip partendo dal link
+        Connection.direct_write(prefix + msg); //aggiungendo d all'inizio specifichi al dns che vuoi conoscere l'indirizzo ip partendo dal link
 
         String response = Connection.wait_for_string();
         Connection.close();
@@ -174,7 +172,7 @@ public abstract class Server {
         new SecureRandom().nextBytes(check);
 
         byte[] aes_key_encoded = pubKey_cipher.doFinal(merge_array(key.getEncoded(), check)); //cifra la chiave AES assieme al check code con la chiave pubblica del server
-        Connection.write(aes_key_encoded, true);
+        Connection.direct_write(aes_key_encoded);
 
         AESCipher cipher = new AESCipher(key, check);
         Connection.set_cipher(cipher); //da ora la connessione verrà cifrata con la chiave AES appena generata
@@ -209,7 +207,7 @@ public abstract class Server {
 
                 //si scollega dal server
                 if (notify_server) { //se deve avvisare il server che si sta scollegando
-                    Connection.write("EOC", false); //avvisa che sta chiudendo la connessione
+                    Connection.write("EOC"); //avvisa che sta chiudendo la connessione
                 }
                 Connection.close();
 
@@ -267,13 +265,13 @@ public abstract class Server {
                 byte[] server_msg = Arrays.copyOf(("login:" + input.elementAt(0) + ";").getBytes(), 7 + input.elementAt(0).length() + psw_hash.length);
                 System.arraycopy(psw_hash, 0, server_msg, 7 + input.elementAt(0).length(), psw_hash.length);
 
-                Connection.write(server_msg, false, login_result); //attende una risposta dal server
+                Connection.write(server_msg, login_result); //attende una risposta dal server
             } catch (NoSuchAlgorithmException e) {
                 throw new RuntimeException(e);
             }
         }
 
-        private On_arrival login_result = (msg) -> { //una volta ricevuta la risposta dal server
+        private On_arrival login_result = (conv_code, msg) -> { //una volta ricevuta la risposta dal server
             if (Arrays.compare(msg, "log".getBytes()) == 0) { //se il login è andato a buon fine
                 if (Database.DEBUG) { CentralTerminal_panel.terminal_write("password e nome utente giusti\n", false); }
                 CentralTerminal_panel.terminal_write("login effettuato con successo! username = " + input.elementAt(0) + "\n", false);
@@ -326,13 +324,13 @@ public abstract class Server {
                 byte[] server_msg = Arrays.copyOf(("register:" + input.elementAt(0) + ";").getBytes(), 10 + input.elementAt(0).length() + psw_hash.length);
                 System.arraycopy(psw_hash, 0, server_msg, 10 + input.elementAt(0).length(), psw_hash.length);
 
-                Connection.write(server_msg, false, register_result);
+                Connection.write(server_msg, register_result);
             } catch (NoSuchAlgorithmException e) {
                 throw new RuntimeException(e);
             }
         }
 
-        private On_arrival register_result = (msg) -> {
+        private On_arrival register_result = (conv_code, msg) -> {
             if (Arrays.compare(msg, "reg".getBytes()) == 0) { //se la registrazione è andata a buon fine
                 CentralTerminal_panel.terminal_write("registrazione effettuata con successo! username = " + input.elementAt(0) + "\n", false);
 

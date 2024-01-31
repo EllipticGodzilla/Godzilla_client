@@ -89,30 +89,21 @@ public abstract class ClientList_panel extends Database {
     }
 
     public static ActionListener connect_list = e -> {
-        On_arrival pair_resp = new On_arrival() {
-            @Override
-            public void on_arrival(byte[] msg) {
-                if (msg[0] == 1) { //appaiamento accettato
-                    Connection.pair(clients_list.getSelectedValue());
-                    CentralTerminal_panel.terminal_write("collegamento con " + clients_list.getSelectedValue() + " instaurato con successo!\n", false);
-                    TempPanel.show_msg("collegamento con " + clients_list.getSelectedValue() + " instaurato con successo!");
-                }
-                else { //appaiamento rifiutato
-                    CentralTerminal_panel.terminal_write("collegamento con " + clients_list.getSelectedValue() + " rifiutato\n", false);
-                    TempPanel.show_msg("collegamento con " + clients_list.getSelectedValue() + " rifiutato");
-                }
+        On_arrival pair_resp = (conv_code, msg) -> {
+            if (msg[0] == 1) { //appaiamento accettato
+                Connection.pair(clients_list.getSelectedValue());
+                CentralTerminal_panel.terminal_write("collegamento con " + clients_list.getSelectedValue() + " instaurato con successo!\n", false);
+                TempPanel.show_msg("collegamento con " + clients_list.getSelectedValue() + " instaurato con successo!");
             }
-
-            @Override
-            public void timedout() {
-                CentralTerminal_panel.terminal_write("collegamento con " + clients_list.getSelectedValue() + " rifiutato, tempo scaduto\n", false);
-                TempPanel.show_msg("collegamento con " + clients_list.getSelectedValue() + " rifiutato, tempo scaduto");
+            else { //appaiamento rifiutato
+                CentralTerminal_panel.terminal_write("collegamento con " + clients_list.getSelectedValue() + " rifiutato\n", false);
+                TempPanel.show_msg("collegamento con " + clients_list.getSelectedValue() + " rifiutato");
             }
         };
 
         String pair_usr = clients_list.getSelectedValue();
         if (!pair_usr.equals("") && !Connection.is_paired()) { //se è selezionato un client e non è appaiato con nessun altro client
-            Connection.write("pair:" + pair_usr, false, pair_resp);
+            Connection.write(("pair:" + pair_usr).getBytes(), pair_resp);
         }
         else if (Connection.is_paired()) {
             TempPanel.show_msg("impossibile collegarsi a più client");
