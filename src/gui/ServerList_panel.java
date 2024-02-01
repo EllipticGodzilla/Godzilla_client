@@ -1,6 +1,7 @@
 package gui;
 
 import file_database.Database;
+import file_database.File_interface;
 import network.Connection;
 import network.Server;
 
@@ -8,6 +9,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Vector;
 
@@ -19,7 +21,7 @@ public abstract class ServerList_panel extends Database {
     private static GList server_list; //rispetto a JList viene modificata la grafica ed inserito un popup per rinominare ed eliminare server dalla lista
 
     private static JPanel serverL_panel = null;
-    protected static JPanel init() throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
+    protected static JPanel init() throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException, IOException {
         if (serverL_panel == null) {
             serverL_panel = new JPanel();
             serverL_panel.setBackground(new Color(58, 61, 63));
@@ -48,18 +50,18 @@ public abstract class ServerList_panel extends Database {
             add_server.setBorder(null);
             filler.setBorder(null);
 
-            connect.setIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_on.png")));
-            connect.setRolloverIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_on_sel.png")));
-            connect.setPressedIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_on_pres.png")));
-            connect.setDisabledIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_on_dis.png")));
-            disconnect.setIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_off.png")));
-            disconnect.setRolloverIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_off_sel.png")));
-            disconnect.setPressedIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_off_pres.png")));
-            disconnect.setDisabledIcon(new ImageIcon(ServerList_panel.class.getResource("/images/power_off_dis.png")));
-            add_server.setIcon(new ImageIcon(ServerList_panel.class.getResource("/images/add_server.png")));
-            add_server.setRolloverIcon(new ImageIcon(ServerList_panel.class.getResource("/images/add_server_sel.png")));
-            add_server.setPressedIcon(new ImageIcon(ServerList_panel.class.getResource("/images/add_server_pres.png")));
-            add_server.setDisabledIcon(new ImageIcon(ServerList_panel.class.getResource("/images/add_server_dis.png")));
+            connect.setIcon(new ImageIcon(File_interface.jar_path + "/images/power_on.png"));
+            connect.setRolloverIcon(new ImageIcon(File_interface.jar_path + "/images/power_on_sel.png"));
+            connect.setPressedIcon(new ImageIcon(File_interface.jar_path + "/images/power_on_pres.png"));
+            connect.setDisabledIcon(new ImageIcon(File_interface.jar_path + "/images/power_on_dis.png"));
+            disconnect.setIcon(new ImageIcon(File_interface.jar_path + "/images/power_off.png"));
+            disconnect.setRolloverIcon(new ImageIcon(File_interface.jar_path + "/images/power_off_sel.png"));
+            disconnect.setPressedIcon(new ImageIcon(File_interface.jar_path + "/images/power_off_pres.png"));
+            disconnect.setDisabledIcon(new ImageIcon(File_interface.jar_path + "/images/power_off_dis.png"));
+            add_server.setIcon(new ImageIcon(File_interface.jar_path + "/images/add_server.png"));
+            add_server.setRolloverIcon(new ImageIcon(File_interface.jar_path + "/images/add_server_sel.png"));
+            add_server.setPressedIcon(new ImageIcon(File_interface.jar_path + "/images/add_server_pres.png"));
+            add_server.setDisabledIcon(new ImageIcon(File_interface.jar_path + "/images/add_server_dis.png"));
 
             connect.setPreferredSize(new Dimension(30, 30));
             disconnect.setPreferredSize(new Dimension(30, 30));

@@ -21,10 +21,10 @@ public class File_cipher {
     private static Cipher decrypter = null;
 
     protected static void init() throws InterruptedException {
-        if (is_empty(Database.FileCypherKey_test)) { //se non è ancora stata impostata una password, o se si vuole resettare
-            TempPanel.request_string("inserisci una password per i database: ", psw_gen);
+        if (is_empty(Database.FileCypherKey_test)) { //se non è stata impostata una password
+            throw new RuntimeException("non è specificata una password per cifrare i file");
         } else {
-            TempPanel.request_string("inserisci la chiave per i database: ", AES_init); //richiede la password
+            TempPanel.request_string("inserisci la chiave per i database: ", AES_init); //chiede la password
         }
     }
 
@@ -36,74 +36,6 @@ public class File_cipher {
         }
         return true;
     }
-
-    private static StringVectorOperator psw_gen = new StringVectorOperator() {
-        @Override
-        public void success() { //ha ricevuto una password per cifrare i file, la salva e inizia a cifrare i file utilizzando questa
-            if (Database.DEBUG) { CentralTerminal_panel.terminal_write("ricevuta password per i file, ", false); }
-            try {
-                MessageDigest md = MessageDigest.getInstance("SHA3-512");
-                byte[] hash = md.digest(input.elementAt(0).getBytes());
-
-                //copia gli ultimi 32 byte nel file FileCipherKey.dat
-                byte[] test_byte = Arrays.copyOfRange(hash, 32, 64);
-                File_interface.overwrite_file(
-                        File_interface.FILE_CIPHER_KEY,
-                        Base64.getEncoder().encodeToString(test_byte)
-                );
-                if (Database.DEBUG) { CentralTerminal_panel.terminal_write("salvata la password nel database, ", false); }
-
-                //utilizza i primi 32 byte dell'hash per key ed iv
-                byte[] key_bytes = Arrays.copyOf(hash, 16);
-                byte[] iv_bytes = Arrays.copyOfRange(hash, 16, 32);
-
-                SecretKey key = new SecretKeySpec(key_bytes, "AES");
-                IvParameterSpec iv = new IvParameterSpec(iv_bytes);
-
-                //inzializza encrypter e decrypter con key ed iv appena calcolati
-                encrypter = Cipher.getInstance("AES/CBC/PKCS5Padding");
-                decrypter = Cipher.getInstance("AES/CBC/PKCS5Padding");
-
-                encrypter.init(Cipher.ENCRYPT_MODE, key, iv);
-                decrypter.init(Cipher.DECRYPT_MODE, key, iv);
-                if (Database.DEBUG) { CentralTerminal_panel.terminal_write("inizializzati i cipher\n", false); }
-
-                File_interface.init_next();
-
-            } catch (NoSuchAlgorithmException e) {
-                throw new RuntimeException(e);
-            } catch (InvalidAlgorithmParameterException e) {
-                throw new RuntimeException(e);
-            } catch (NoSuchPaddingException e) {
-                throw new RuntimeException(e);
-            } catch (InvalidKeyException e) {
-                throw new RuntimeException(e);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            } catch (BadPaddingException e) {
-                throw new RuntimeException(e);
-            } catch (IllegalBlockSizeException e) {
-                throw new RuntimeException(e);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            } catch (InvocationTargetException e) {
-                throw new RuntimeException(e);
-            } catch (NoSuchMethodException e) {
-                throw new RuntimeException(e);
-            } catch (IllegalAccessException e) {
-                throw new RuntimeException(e);
-            } catch (InstantiationException e) {
-                throw new RuntimeException(e);
-            } catch (InvalidKeySpecException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        @Override
-        public void fail() {
-            TempPanel.show_msg("è necessaria una password per cifrare i database", error_psw, false);
-        }
-    };
 
     private static StringVectorOperator AES_init = new StringVectorOperator() {
         @Override
@@ -117,49 +49,10 @@ public class File_cipher {
                     fail();
                 } else {
                     if (Database.DEBUG) { CentralTerminal_panel.terminal_write("password corretta, ", false); }
-                    //utilizza i primi 32byte dell'hash come key ed iv per inizializzare AES
-                    byte[] key_bytes = Arrays.copyOf(hash, 16);
-                    byte[] iv_bytes = Arrays.copyOfRange(hash, 16, 32);
-
-                    SecretKey key = new SecretKeySpec(key_bytes, "AES");
-                    IvParameterSpec iv = new IvParameterSpec(iv_bytes);
-
-                    //inzializza encrypter e decrypter con key ed iv appena calcolati
-                    encrypter = Cipher.getInstance("AES/CBC/PKCS5Padding");
-                    decrypter = Cipher.getInstance("AES/CBC/PKCS5Padding");
-
-                    encrypter.init(Cipher.ENCRYPT_MODE, key, iv);
-                    decrypter.init(Cipher.DECRYPT_MODE, key, iv);
-                    if (Database.DEBUG) { CentralTerminal_panel.terminal_write("inizializzati i cipher\n", false); }
-
-                    File_interface.init_next();
+                    decript_files(hash);
                 }
 
-            } catch (NoSuchAlgorithmException e) {
-                throw new RuntimeException(e);
-            } catch (NoSuchPaddingException e) {
-                throw new RuntimeException(e);
-            } catch (InvalidAlgorithmParameterException e) {
-                throw new RuntimeException(e);
-            } catch (InvalidKeyException e) {
-                throw new RuntimeException(e);
-            } catch (IllegalBlockSizeException e) {
-                throw new RuntimeException(e);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            } catch (BadPaddingException e) {
-                throw new RuntimeException(e);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            } catch (InvocationTargetException e) {
-                throw new RuntimeException(e);
-            } catch (NoSuchMethodException e) {
-                throw new RuntimeException(e);
-            } catch (IllegalAccessException e) {
-                throw new RuntimeException(e);
-            } catch (InstantiationException e) {
-                throw new RuntimeException(e);
-            } catch (InvalidKeySpecException e) {
+            } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         }
@@ -171,15 +64,25 @@ public class File_cipher {
         }
     };
 
-    private static StringVectorOperator error_psw = new StringVectorOperator() {
-        @Override
-        public void success() {
-            TempPanel.request_string("inserisci una password per i database: ", psw_gen);
-        }
+    private static void decript_files(byte[] key_hash) throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException, IllegalBlockSizeException, IOException, BadPaddingException, InvalidKeySpecException, InterruptedException, InvocationTargetException, NoSuchMethodException, IllegalAccessException, InstantiationException {
+        //utilizza i primi 32byte dell'hash come key ed iv per inizializzare AES
+        byte[] key_bytes = Arrays.copyOf(key_hash, 16);
+        byte[] iv_bytes = Arrays.copyOfRange(key_hash, 16, 32);
 
-        @Override
-        public void fail() {} //essendo un messaggio non può "fallire"
-    };
+        SecretKey key = new SecretKeySpec(key_bytes, "AES");
+        IvParameterSpec iv = new IvParameterSpec(iv_bytes);
+
+        //inzializza encrypter e decrypter con key ed iv appena calcolati
+        encrypter = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        decrypter = Cipher.getInstance("AES/CBC/PKCS5Padding");
+
+        encrypter.init(Cipher.ENCRYPT_MODE, key, iv);
+        decrypter.init(Cipher.DECRYPT_MODE, key, iv);
+        if (Database.DEBUG) { CentralTerminal_panel.terminal_write("inizializzati i cipher\n", false); }
+
+        if (Database.DEBUG) { CentralTerminal_panel.terminal_write("leggo il file con la chiave pubblica della CA\n", false); }
+        File_interface.init_ca_public_key();
+    }
 
     private static StringVectorOperator error_init = new StringVectorOperator() {
         @Override

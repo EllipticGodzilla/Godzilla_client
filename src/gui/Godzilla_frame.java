@@ -7,6 +7,7 @@ import javax.swing.*;
 import javax.swing.plaf.basic.BasicScrollBarUI;
 import java.awt.*;
 import java.awt.event.*;
+import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.LinkedHashMap;
@@ -34,7 +35,7 @@ public abstract class Godzilla_frame {
 
     private static JFrame godzilla_frame = null;
 
-    public static JFrame init() throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException { //inizializza la schermata e ritorna il JFrame
+    public static JFrame init() throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException, IOException { //inizializza la schermata e ritorna il JFrame
         if (godzilla_frame == null) {
             godzilla_frame = new JFrame("Godzilla - Client");
             godzilla_frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);

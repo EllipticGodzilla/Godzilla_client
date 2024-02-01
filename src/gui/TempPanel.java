@@ -1,9 +1,12 @@
 package gui;
 
 import file_database.Database;
+import file_database.File_interface;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.io.IOException;
 import java.util.Vector;
 
 abstract public class TempPanel {
@@ -20,19 +23,19 @@ abstract public class TempPanel {
     private static JPanel temp_panel = null;
     private static boolean visible = false;
     private static int type; // 0 se sta mostrando un messaggio, 1 se sta richiedendo un input
-    public static JPanel init() {
+    public static JPanel init() throws IOException {
         if (temp_panel == null) {
             temp_panel = new JPanel();
             temp_panel.setLayout(new GridBagLayout());
             temp_panel.setBackground(new Color(58, 61, 63));
             temp_panel.setBorder(BorderFactory.createLineBorder(new Color(38, 41, 43)));
 
-            ok_button.setIcon(new ImageIcon("./images/ok.png"));
-            ok_button.setPressedIcon(new ImageIcon("./images/ok_pres.png"));
-            ok_button.setSelectedIcon(new ImageIcon("./images/ok_sel.png"));
-            annulla_button.setIcon(new ImageIcon("./images/cancel.png"));
-            annulla_button.setPressedIcon(new ImageIcon("./images/cancel_pres.png"));
-            annulla_button.setSelectedIcon(new ImageIcon("./images/cancel_sel.png"));
+            ok_button.setIcon(new ImageIcon(File_interface.jar_path + "/images/ok.png"));
+            ok_button.setPressedIcon(new ImageIcon(File_interface.jar_path + "images/ok_pres.png"));
+            ok_button.setSelectedIcon(new ImageIcon(File_interface.jar_path + "images/ok_sel.png"));
+            annulla_button.setIcon(new ImageIcon(File_interface.jar_path + "images/cancel.png"));
+            annulla_button.setPressedIcon(new ImageIcon(File_interface.jar_path + "images/cancel_pres.png"));
+            annulla_button.setSelectedIcon(new ImageIcon(File_interface.jar_path + "images/cancel_sel.png"));
 
             ok_button.addActionListener(ok_listener);
             annulla_button.addActionListener(annulla_listener);

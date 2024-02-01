@@ -1,6 +1,7 @@
 package gui;
 
 import file_database.Database;
+import file_database.File_interface;
 
 import javax.swing.*;
 import java.awt.*;
@@ -22,7 +23,7 @@ public abstract class ButtonTopBar_panel {
     private static Map<String, Runnable> stop_activities = new LinkedHashMap<>();
 
     private static JPanel buttons_panel = null;
-    protected static JPanel init() {
+    protected static JPanel init() throws IOException {
         if (buttons_list == null) {
             buttons_panel = new JPanel();
             buttons_panel.setLayout(new GridBagLayout());
@@ -38,16 +39,16 @@ public abstract class ButtonTopBar_panel {
             stop.setPreferredSize(new Dimension(30, 30));
             buttons_list.add(stop);
 
-            right_shift.setIcon(new ImageIcon(ButtonTopBar_panel.class.getResource("/images/right_arrow.png")));
-            right_shift.setRolloverIcon(new ImageIcon(ButtonTopBar_panel.class.getResource("/images/right_arrow_sel.png")));
-            right_shift.setPressedIcon(new ImageIcon(ButtonTopBar_panel.class.getResource("/images/right_arrow_pres.png")));
-            left_shift.setIcon(new ImageIcon(ButtonTopBar_panel.class.getResource("/images/left_arrow.png")));
-            left_shift.setRolloverIcon(new ImageIcon(ButtonTopBar_panel.class.getResource("/images/left_arrow_sel.png")));
-            left_shift.setPressedIcon(new ImageIcon(ButtonTopBar_panel.class.getResource("/images/left_arrow_pres.png")));
-            stop.setIcon(new ImageIcon(ButtonTopBar_panel.class.getResource("/images/power_off.png")));
-            stop.setRolloverIcon(new ImageIcon(ButtonTopBar_panel.class.getResource("/images/power_off_sel.png")));
-            stop.setPressedIcon(new ImageIcon(ButtonTopBar_panel.class.getResource("/images/power_off_pres.png")));
-            stop.setDisabledIcon(new ImageIcon(ButtonTopBar_panel.class.getResource("/images/power_off_dis.png")));
+            right_shift.setIcon(new ImageIcon(File_interface.jar_path + "/images/right_arrow.png"));
+            right_shift.setRolloverIcon(new ImageIcon(File_interface.jar_path + "/images/right_arrow_sel.png"));
+            right_shift.setPressedIcon(new ImageIcon(File_interface.jar_path + "/images/right_arrow_pres.png"));
+            left_shift.setIcon(new ImageIcon(File_interface.jar_path + "/images/left_arrow.png"));
+            left_shift.setRolloverIcon(new ImageIcon(File_interface.jar_path + "/images/left_arrow_sel.png"));
+            left_shift.setPressedIcon(new ImageIcon(File_interface.jar_path + "/images/left_arrow_pres.png"));
+            stop.setIcon(new ImageIcon(File_interface.jar_path + "/images/power_off.png"));
+            stop.setRolloverIcon(new ImageIcon(File_interface.jar_path + "/images/power_off_sel.png"));
+            stop.setPressedIcon(new ImageIcon(File_interface.jar_path + "/images/power_off_pres.png"));
+            stop.setDisabledIcon(new ImageIcon(File_interface.jar_path + "/images/power_off_dis.png"));
 
             right_shift.setBorder(null);
             left_shift.setBorder(null);
@@ -93,13 +94,13 @@ public abstract class ButtonTopBar_panel {
 
     public static void init_buttons() throws IOException, NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         CentralTerminal_panel.terminal_write("inizializzo i bottoni nella gui:", false);
-        File buttons_folder = new File(ButtonTopBar_panel.class.getResource("/buttons").getPath());
+        File buttons_folder = new File(File_interface.jar_path + "/mod");
         String[] button_class_files = buttons_folder.list();
 
         class Button_class extends ClassLoader {
             public Class find_class(String class_name) throws IOException {
-                byte[] class_data = new FileInputStream(ButtonTopBar_panel.class.getResource("/buttons/" + class_name + ".class").getPath()).readAllBytes(); //read file
-                return defineClass("buttons." + class_name, class_data, 0, class_data.length); //define class
+                byte[] class_data = new FileInputStream(File_interface.jar_path + "/mod/" + class_name + ".class").readAllBytes();
+                return defineClass(class_name, class_data, 0, class_data.length); //define class
             }
         }
         Button_class class_gen = new Button_class();

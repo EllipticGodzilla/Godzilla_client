@@ -1,11 +1,13 @@
 package gui;
 
 import file_database.Database;
+import file_database.File_interface;
 import network.Connection;
 import network.On_arrival;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionListener;
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.regex.Pattern;
 
@@ -15,7 +17,7 @@ public abstract class ClientList_panel extends Database {
     private static GList clients_list = null;
     private static JPanel client_panel = null;
 
-    protected static JPanel init() {
+    protected static JPanel init() throws IOException {
         if (client_panel == null) {
             client_panel = new JPanel();
             client_panel.setBackground(new Color(58, 61, 63));
@@ -33,14 +35,14 @@ public abstract class ClientList_panel extends Database {
             spacer.setBackground(new Color(58, 61, 63));
             spacer.setFocusable(false);
 
-            connect.setIcon(new ImageIcon(ClientList_panel.class.getResource("/images/power_on.png")));
-            connect.setRolloverIcon(new ImageIcon(ClientList_panel.class.getResource("/images/power_on_sel.png")));
-            connect.setPressedIcon(new ImageIcon(ClientList_panel.class.getResource("/images/power_on_pres.png")));
-            connect.setDisabledIcon(new ImageIcon(ClientList_panel.class.getResource("/images/power_on_dis.png")));
-            disconnect.setIcon(new ImageIcon(ClientList_panel.class.getResource("/images/power_off.png")));
-            disconnect.setRolloverIcon(new ImageIcon(ClientList_panel.class.getResource("/images/power_off_sel.png")));
-            disconnect.setPressedIcon(new ImageIcon(ClientList_panel.class.getResource("/images/power_off_pres.png")));
-            disconnect.setDisabledIcon(new ImageIcon(ClientList_panel.class.getResource("/images/power_off_dis.png")));
+            connect.setIcon(new ImageIcon(File_interface.jar_path + "/images/power_on.png"));
+            connect.setRolloverIcon(new ImageIcon(File_interface.jar_path + "/images/power_on_sel.png"));
+            connect.setPressedIcon(new ImageIcon(File_interface.jar_path + "/images/power_on_pres.png"));
+            connect.setDisabledIcon(new ImageIcon(File_interface.jar_path + "/images/power_on_dis.png"));
+            disconnect.setIcon(new ImageIcon(File_interface.jar_path + "/images/power_off.png"));
+            disconnect.setRolloverIcon(new ImageIcon(File_interface.jar_path + "/images/power_off_sel.png"));
+            disconnect.setPressedIcon(new ImageIcon(File_interface.jar_path + "/images/power_off_pres.png"));
+            disconnect.setDisabledIcon(new ImageIcon(File_interface.jar_path + "/images/power_off_dis.png"));
 
             connect.setBorder(null);
             disconnect.setBorder(null);
