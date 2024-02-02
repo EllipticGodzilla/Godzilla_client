@@ -2,7 +2,7 @@ package gui;
 
 import file_database.Database;
 import file_database.File_interface;
-
+import file_database.Pair;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -12,30 +12,35 @@ import java.util.Vector;
 abstract public class TempPanel {
     private static JButton ok_button = new JButton();
     private static JButton annulla_button = new JButton();
+    private static final int MIN_WIDTH = 220; //ok_button.width + annulla_button.width + 30 (insects)
+    private static final int MIN_HEIGHT = 40; //butto.height + 20 (insects)
 
-    public static Vector<JTextArea> input_array = new Vector<>();
+    public static Vector<JTextField> input_array = new Vector<>();
     private static StringVectorOperator action = null;
-    private static Vector<Triple<Vector<String>, StringVectorOperator, Integer>> queue = new Vector<>();
-    private static final int MESSAGE = 0;
-    private static final int TA_MESSAGE = 1;
-    private static final int INPUT = 2;
+    private static Vector<Pair<TempPanel_info, StringVectorOperator>> queue = new Vector<>();
 
-    private static JPanel temp_panel = null;
+    private static JPanel temp_panel = null; //temp panel
+    private static JPanel txt_panel = new JPanel(); //pannello che contiene le txt area
     private static boolean visible = false;
-    private static int type; // 0 se sta mostrando un messaggio, 1 se sta richiedendo un input
+
     public static JPanel init() throws IOException {
         if (temp_panel == null) {
+            //imposta layout, background, border dei JPanel
             temp_panel = new JPanel();
             temp_panel.setLayout(new GridBagLayout());
+            txt_panel.setLayout(new GridBagLayout());
             temp_panel.setBackground(new Color(58, 61, 63));
+            txt_panel.setBackground(new Color(58, 61, 63));
             temp_panel.setBorder(BorderFactory.createLineBorder(new Color(38, 41, 43)));
+            txt_panel.setBorder(null);
 
+            //inizializza i bottoni ok ed annulla
             ok_button.setIcon(new ImageIcon(File_interface.jar_path + "/images/ok.png"));
-            ok_button.setPressedIcon(new ImageIcon(File_interface.jar_path + "images/ok_pres.png"));
-            ok_button.setSelectedIcon(new ImageIcon(File_interface.jar_path + "images/ok_sel.png"));
-            annulla_button.setIcon(new ImageIcon(File_interface.jar_path + "images/cancel.png"));
-            annulla_button.setPressedIcon(new ImageIcon(File_interface.jar_path + "images/cancel_pres.png"));
-            annulla_button.setSelectedIcon(new ImageIcon(File_interface.jar_path + "images/cancel_sel.png"));
+            ok_button.setPressedIcon(new ImageIcon(File_interface.jar_path + "/images/ok_pres.png"));
+            ok_button.setSelectedIcon(new ImageIcon(File_interface.jar_path + "/images/ok_sel.png"));
+            annulla_button.setIcon(new ImageIcon(File_interface.jar_path + "/images/cancel.png"));
+            annulla_button.setPressedIcon(new ImageIcon(File_interface.jar_path + "/images/cancel_pres.png"));
+            annulla_button.setSelectedIcon(new ImageIcon(File_interface.jar_path + "/images/cancel_sel.png"));
 
             ok_button.addActionListener(ok_listener);
             annulla_button.addActionListener(annulla_listener);
@@ -59,6 +64,31 @@ abstract public class TempPanel {
                     }
                 }
             });
+
+            //aggiunge gli elementi al tempPanel
+            GridBagConstraints c = new GridBagConstraints();
+
+            c.fill = GridBagConstraints.BOTH;
+            c.insets = new Insets(10, 10, 0, 0);
+            c.weighty = 1;
+            c.weightx = 1;
+            c.gridx = 0;
+            c.gridy = 0;
+            c.gridwidth = 2;
+            temp_panel.add(txt_panel, c);
+
+            c.fill = GridBagConstraints.NONE;
+            c.anchor = GridBagConstraints.FIRST_LINE_START;
+            c.insets = new Insets(0, 10, 10, 10);
+            c.weighty = 0;
+            c.gridy = 1;
+            c.gridwidth = 1;
+            temp_panel.add(annulla_button, c);
+
+            c.anchor = GridBagConstraints.FIRST_LINE_END;
+            c.insets.left = 0;
+            c.gridx = 1;
+            temp_panel.add(ok_button, c);
         }
         return temp_panel;
     }
@@ -73,11 +103,11 @@ abstract public class TempPanel {
         reset(); //resetta tutta la grafica e fa partire il prossimo in coda
 
         if (action != null) { //se è stata specificata un azione
-            if (type == MESSAGE || (type == INPUT && valid_input())) {
+            if (input_txt.size() == 0 || valid_input()) { //se è un messaggio, o se richiede un input ed è stato inserito testo valido
                 action.input.removeAllElements();
                 action.input.addAll(input_txt); //fa partire il codice con tutti gli input ricavati
                 new Thread(() -> action.success()).start();
-            } else {
+            } else { //se non è stato inserito un input valido
                 new Thread(() -> action.fail()).start();
             }
         }
@@ -93,243 +123,189 @@ abstract public class TempPanel {
         }
     };
 
-    public static void show_msg(String msg) {
-        show_msg(msg, null, false);
+    public static void show(TempPanel_info info, StringVectorOperator action)
+    {
+        if (!visible)
+        {
+            //imposta questa azione come quella da eseguire una volta chiusa la finestra
+            TempPanel.action = action;
+
+            //distingue nei vari tipi di finestra
+            if (info.request_input()) //se richiede degli input
+            {
+                request_input(info.get_requests(), info.get_psw_info());
+            }
+            else //se mostra solamente un messaggio
+            {
+                show_msg(info.get_msg(), info.annulla_vis());
+            }
+        }
+        else
+        {
+            queue.add(new Pair<>(info, action)); //aggiunge questa richiesta alla coda
+        }
     }
 
-    public static void show_msg(String msg, StringVectorOperator action, boolean two_answer_question) {
-        if (!visible) {
-            TempPanel.action = action;
-            type = MESSAGE;
-            NofocusTextArea t = new NofocusTextArea(msg);
+    private static void show_msg(String msg, boolean show_annulla) //mostra un messaggio
+    {
+        NofocusTextField msg_area = new NofocusTextField(msg);
 
-            GridBagConstraints c = new GridBagConstraints();
-            c.fill = GridBagConstraints.NONE;
+        GridBagConstraints c = new GridBagConstraints();
 
-            //ordina tutti i componenti nel pannello e lo ridimensiona
+        //aggiunge al pannello la txt area contenente il messaggio
+        c.fill = GridBagConstraints.BOTH;
+        c.weightx = 1;
+        c.gridx = 0;
+        c.gridy = 0;
+        c.insets = new Insets(0, 0, 10, 10);
+        txt_panel.add(msg_area, c);
+
+        annulla_button.setVisible(show_annulla); //mostra il pulsante annulla solo se richiesto
+
+        show_panel(msg_area.getPreferredSize().width + 20, msg_area.getPreferredSize().height + 10); //rende visibile il pannello
+        ok_button.requestFocus(); //richiede il focus, in modo che se premuto invio appena il popup compare equivale a premere "ok"
+    }
+
+    private static void request_input(String[] requests, boolean[] psw_indices)
+    {
+        int max_width = 0; //contiene la lunghezza della JTextArea che contiene il messaggio più lungo
+
+        GridBagConstraints c = new GridBagConstraints();
+        c.fill = GridBagConstraints.BOTH;
+        c.insets = new Insets(0, 0, 10, 10);
+
+        //genera e aggiunge al pannello txt_panel tutti le JTextArea
+        for (c.gridy = 0; c.gridy < requests.length; c.gridy++)
+        {
+            //genera il JTextField che mostra il messaggio per richiedere l'input e lo aggiunge al pannello
+            NofocusTextField msg_area = new NofocusTextField(requests[c.gridy]);
+            if (msg_area.getPreferredSize().width > max_width)
+            {
+                max_width = msg_area.getPreferredSize().width;
+            }
+
+            c.weightx = 1;
             c.gridx = 0;
-            c.gridy = 0;
-            c.gridwidth = 2;
-            c.insets = new Insets(10, 10, 5, 10);
-            temp_panel.add(t, c);
+            txt_panel.add(msg_area, c);
 
-            if (two_answer_question) { //aggiunge anche il pulsante annulla solo se è una domanda
-                c.gridy = 1;
-                c.gridwidth = 1;
-                c.insets = new Insets(5, 10, 10, 5);
-                c.anchor = GridBagConstraints.LAST_LINE_START;
-                temp_panel.add(annulla_button, c);
-            } else {
-                annulla_button.setVisible(false);
-            }
+            JTextField input_field;
+            //aggiunge il TextField dove poter inserire l'input richiesto
+            if (psw_indices[c.gridy]) //se deve aggiungere un PasswordField
+            {
+                input_field = new PasswordField(c.gridy);
 
-            c.anchor = GridBagConstraints.LAST_LINE_END;
-            c.gridx = 1;
-            c.gridy = 1;
-            c.gridwidth = 1;
-            c.insets = new Insets(5, 5, 10, 10);
-            temp_panel.add(ok_button, c);
-
-            int min_width = (int) (ok_button.getPreferredSize().getWidth() + annulla_button.getPreferredSize().getWidth() + 30);
-            temp_panel.setSize(
-                    (t.getPreferredSize().width + 20 > min_width) ? t.getPreferredSize().width + 20 : min_width,
-                    (int) (t.getPreferredSize().height + ok_button.getPreferredSize().getHeight() + 30)
-            );
-
-            Godzilla_frame.disable_panels();
-            Godzilla_frame.recenter_temp_panel();
-
-            temp_panel.setVisible(true);
-            temp_panel.updateUI();
-            visible = true;
-
-            ok_button.requestFocus(); //richiede il focus, in modo che se premuto invio appena il popup compare equivale a premere "ok"
-        } else {
-            Vector<String> vec = new Vector<>(); //aggiunge alla coda questo messaggio
-            vec.add(msg);
-
-            if (two_answer_question) {
-                queue.add(new Triple<>(vec, action, TA_MESSAGE));
-            } else {
-                queue.add(new Triple<>(vec, action, MESSAGE));
-            }
-        }
-    }
-
-    public static void request_string(String txt, StringVectorOperator action) {
-        Vector<String> txt_v = new Vector<>();
-        txt_v.add(txt);
-
-        if (!visible) {
-            type = INPUT;
-            request_string(txt_v, action);
-        } else {
-            queue.add(new Triple<>(txt_v, action, INPUT)); //aggiunge alla coda questa richiesta
-            System.out.println(queue.size());
-        }
-    }
-
-    public static void request_string(Vector<String> txt_vec, StringVectorOperator action) {
-        if (!visible) {
-            CentralTerminal_panel.terminal_write("richiesta di un input: ", false);
-
-            type = INPUT;
-            TempPanel.action = action;
-
-            JPanel txt_panel = new JPanel();
-            txt_panel.setBackground(new Color(58, 61, 63));
-            txt_panel.setLayout(new GridBagLayout());
-
-            GridBagConstraints c = new GridBagConstraints();
-            c.fill = GridBagConstraints.NONE;
-            c.anchor = GridBagConstraints.LAST_LINE_END;
-
-            c.insets = new Insets(0, 0, 0, 10); //le JTextArea della prima riga hanno insets diversi dalle altre
-
-            int max_txt_width = 0;
-            for (int i = 0; i < txt_vec.size(); i++) { //genera ed aggiunge a txt_panel tutte le JTextArea
-                CentralTerminal_panel.terminal_write(txt_vec.elementAt(i) + ", ", false);
-                input_array.add(new FocusTextArea(i));
-
-                JTextArea txt_area = new NofocusTextArea(txt_vec.elementAt(i));
-                if (txt_area.getPreferredSize().width > max_txt_width) { //aggiorna la lunghezza massima delle JTextArea contenenti il testo
-                    max_txt_width = txt_area.getPreferredSize().width;
-                }
-
-                //aggiunge le due JTextArea appena generate a txt_panel
-                c.gridx = 0;
-                c.gridy = i;
-                c.weightx = 1;
-                txt_panel.add(txt_area, c);
-
-                c.gridx = 1;
+                //aggiunge al pannello PasswordField ed il pulsante per togglare la visibilità della scritta
                 c.weightx = 0;
-                c.insets.right = 0;
-                txt_panel.add(input_array.lastElement(), c);
+                c.gridx = 1;
+                c.insets.right = 3;
+                txt_panel.add(input_field, c);
 
-                c.insets = new Insets(10, 0, 0, 10);
-
+                c.gridx = 3;
+                c.insets.right = 10;
+                txt_panel.add(((PasswordField) input_field).get_toggle_button(), c);
             }
-            CentralTerminal_panel.terminal_write("\n", false);
+            else //se deve aggiungere un FocusField
+            {
+                input_field = new FocusTextField(c.gridy);
 
-            //definisce le misure di txt_panel
-            int min_width = ok_button.getPreferredSize().width + annulla_button.getPreferredSize().width + 10;
-            txt_panel.setSize(
-                    (max_txt_width + FocusTextArea.WIDTH + 10 > min_width) ? max_txt_width + FocusTextArea.WIDTH + 10 : min_width,
-                    (FocusTextArea.HEIGHT + 10) * txt_vec.size() - 10
-            );
-
-            //aggiunge a temp_panel i due bottoni ok_button, annulla_button ed il pannello txt_panel
-            c = new GridBagConstraints();
-            c.fill = GridBagConstraints.NONE;
-
-            c.insets = new Insets(10, 10, 5, 10);
-            c.gridx = 0;
-            c.gridy = 0;
-            c.gridwidth = 2;
-            temp_panel.add(txt_panel, c);
-
-            c.insets = new Insets(5, 10, 10, 5);
-            c.gridy = 1;
-            c.gridwidth = 1;
-            temp_panel.add(annulla_button, c);
-
-            c.insets = new Insets(5, 5, 10, 10);
-            c.gridx = 1;
-            c.anchor = GridBagConstraints.LAST_LINE_END;
-            temp_panel.add(ok_button, c);
-
-            //imposta le dimensioni di temp_panel e lo rende visibile
-            temp_panel.setSize(
-                    txt_panel.getWidth() + 20,
-                    txt_panel.getHeight() + ok_button.getPreferredSize().height + 30
-            );
-
-            temp_panel.updateUI();
-            Godzilla_frame.recenter_temp_panel();
-            Godzilla_frame.disable_panels();
-
-            temp_panel.setVisible(true);
-            visible = true;
-
-            //richiede il focus nella prima input area
-            input_array.elementAt(0).requestFocusInWindow();
-        } else {
-            if (Database.DEBUG) {
-                CentralTerminal_panel.terminal_write("aggiungo alla queue la richiesta di input: ", false);
-                for (String reqest : txt_vec) {
-                    CentralTerminal_panel.terminal_write(reqest + ", ", false);
-                }
-                CentralTerminal_panel.terminal_write("\naction = " + action + "\n", false);
+                //aggiunge al pannello input_field
+                c.weightx = 0;
+                c.gridx = 1;
+                txt_panel.add(input_field, c);
             }
-            //aggiunge alla coda questa richiesta
-            queue.add(new Triple<>(txt_vec, action, INPUT));
+
+            input_array.add(input_field); //aggiunge gli input_field in un vettore per poi ricavarne i testi inseriti
         }
+
+        show_panel(max_width + FocusTextField.WIDTH + 30, (FocusTextField.HEIGHT + 10) * input_array.size());
+        input_array.elementAt(0).requestFocusInWindow(); //richiede il focus nella prima input area
     }
 
-    private static boolean valid_input() { //controlla che nessun campo di input sia stato lasciato vuoto o con solo uno spazio/a capo
-        for (JTextArea txt_area : input_array) {
-            String txt = txt_area.getText();
+    private static void show_panel(int comp_width, int comp_height)
+    {
+        //calcola le dimensioni
+        temp_panel.setSize(
+                (comp_width > MIN_WIDTH)? comp_width : MIN_WIDTH,
+                comp_height + MIN_HEIGHT
+        );
 
+        //disattiva tutti i pannelli in Godzilla_frame e ricenta TempPanel
+        Godzilla_frame.disable_panels();
+        Godzilla_frame.recenter_temp_panel();
+
+        //mostra il pannello
+        temp_panel.setVisible(true);
+        temp_panel.updateUI();
+        visible = true;
+    }
+
+    private static boolean valid_input() //controlla che nessun campo di input sia stato lasciato vuoto o con solo uno spazio/a capo
+    {
+        for (JTextField txt_field : input_array)
+        {
+            String txt = txt_field.getText();
             txt = txt.replaceAll("[ \n]", ""); //rimuove tutti gli spazi e \n
 
-            if (txt.equals("")) {
+            if (txt.equals(""))
+            {
                 return false;
             }
         }
         return true;
     }
 
-    private static void reset() {
-        if (Database.DEBUG) { CentralTerminal_panel.terminal_write("resetto temp panel - ", false); }
-
+    private static void reset()
+    {
         //resetta il pannello e lo rende invisibile
         visible = false;
         annulla_button.setVisible(true);
         temp_panel.setVisible(false);
-        temp_panel.removeAll();
+        txt_panel.removeAll();
 
-        if (queue.size() != 0) {
-            if (Database.DEBUG) { CentralTerminal_panel.terminal_write("la coda non è vuota\n", false); }
+        if (queue.size() != 0) //se c'è qualche elemento nella coda
+        {
+            if (Database.DEBUG) { CentralTerminal_panel.terminal_write("TempPanel: la coda non è vuota\n", false); }
 
-            Vector<String> txt = queue.elementAt(0).el1;
-            StringVectorOperator action = queue.elementAt(0).el2;
-            int id = queue.elementAt(0).el3;
-
+            Pair<TempPanel_info, StringVectorOperator> next_in_queue = queue.elementAt(0); //mostra il prossimo elemento nella coda
             queue.removeElementAt(0);
-
-            if (id == MESSAGE) { //è un messaggio
-                show_msg(txt.elementAt(0), action, false);
-            } else if (id == TA_MESSAGE) {
-                show_msg(txt.elementAt(0), action, true);
-            } else { //richiede un input
-                request_string(txt, action);
-            }
-        } else {
-            if (Database.DEBUG) { CentralTerminal_panel.terminal_write("la coda è vuota\n", false); }
-            Godzilla_frame.enable_panels();
+            show(next_in_queue.el1, next_in_queue.el2);
+        }
+        else //la coda è vuota
+        {
+            if (Database.DEBUG) { CentralTerminal_panel.terminal_write("TempPanel: la coda è vuota\n", false); }
+            Godzilla_frame.enable_panels(); //riattiva tutti i pannelli in Godzilla_frame
         }
     }
 
-    private static class NofocusTextArea extends JTextArea {
-        public NofocusTextArea(String txt) {
+    private static class NofocusTextField extends JTextField {
+        public NofocusTextField(String txt) {
             super(txt);
 
             this.setBackground(new Color(58, 61, 63));
             this.setBorder(null);
-            this.setFont(new Font("Charter Bd BT", Font.PLAIN, 12));
+            this.setFont(new Font("Charter Bd BT", Font.PLAIN, 13));
             this.setForeground(new Color(188, 191,  193));
+
+            calculate_size();
 
             this.setFocusable(false);
         }
+
+        private void calculate_size() {
+            FontMetrics fm = this.getFontMetrics(this.getFont());
+            this.setPreferredSize(new Dimension(
+                    fm.stringWidth(this.getText()) + 5,
+                    20
+            ));
+        }
     }
 
-    private static class FocusTextArea extends JTextArea {
+    private static class FocusTextField extends JTextField {
         protected static final int WIDTH  = 150;
         protected static final int HEIGHT = 20;
 
         private final int INDEX;
-        public FocusTextArea(int index) {
+        public FocusTextField(int index) {
             super();
 
             this.INDEX = index;
@@ -368,19 +344,107 @@ abstract public class TempPanel {
             public void keyPressed(KeyEvent e) {}
         };
     }
-}
 
-class Triple <E1, E2, E3> {
-    public E1 el1 = null;
-    public E2 el2 = null;
-    public E3 el3 = null;
+    private static class PasswordField extends JPasswordField {
+        private static final int WIDTH  = 127;
+        private static final int HEIGHT = 20;
 
-    public Triple(E1 el1, E2 el2, E3 el3) {
-        this.el1 = el1;
-        this.el2 = el2;
-        this.el3 = el3;
+        private JButton toggle_button = null;
+        private ImageIcon[] eye_icons = new ImageIcon[] {
+                new ImageIcon(File_interface.jar_path + "/images/eye.png"),
+                new ImageIcon(File_interface.jar_path + "/images/eye_pres.png"),
+                new ImageIcon(File_interface.jar_path + "/images/eye_sel.png")
+
+        };
+        private ImageIcon[] no_eye_icons = new ImageIcon[] {
+                new ImageIcon(File_interface.jar_path + "/images/no_eye.png"),
+                new ImageIcon(File_interface.jar_path + "/images/no_eye_pres.png"),
+                new ImageIcon(File_interface.jar_path + "/images/no_eye_sel.png")
+        };
+
+        private final int INDEX;
+        private boolean clear_text = false;
+
+        public PasswordField(int index) {
+            super();
+            this.INDEX = index;
+
+            this.setBackground(new Color(108, 111, 113));
+            this.setBorder(BorderFactory.createLineBorder(new Color(68, 71, 73)));
+            this.setFont(new Font("Arial", Font.BOLD, 14));
+            this.setForeground(new Color(218, 221, 223));
+
+            this.setPreferredSize(new Dimension(WIDTH, HEIGHT));
+            this.setMinimumSize(this.getPreferredSize());
+
+            this.setEchoChar('*'); //nasconde il testo
+            gen_toggle_button(); //genera il pulsante per togglare la visibilità del testo
+
+            this.addKeyListener(enter_list);
+        }
+
+        public JButton get_toggle_button() {
+            return toggle_button;
+        }
+
+        private void gen_toggle_button() { //genera un pulsante che premuto toggla la visibilità del testo
+            toggle_button = new JButton();
+
+            //inizializza la grafica del pulsante con le icone dell'occhio senza la barra
+            toggle_button.setIcon(eye_icons[0]);
+            toggle_button.setPressedIcon(eye_icons[1]);
+            toggle_button.setRolloverIcon(eye_icons[2]);
+
+            toggle_button.setBorder(null);
+
+            //aggiunge action listener e ritorna il pulsante
+            toggle_button.addActionListener(toggle_list);
+        }
+
+        private ActionListener toggle_list = e -> {
+            if (clear_text) //se in questo momento il testo si vede in chiaro
+            {
+                setEchoChar('*'); //nasconde il testo
+
+                //modifica le icone del pulsante
+                toggle_button.setIcon(eye_icons[0]);
+                toggle_button.setPressedIcon(eye_icons[1]);
+                toggle_button.setRolloverIcon(eye_icons[2]);
+            }
+            else //se in questo momeno il testo è nascosto
+            {
+                setEchoChar((char) 0); //mostra il testo
+
+                //modifica le icone del pulsante
+                toggle_button.setIcon(no_eye_icons[0]);
+                toggle_button.setPressedIcon(no_eye_icons[1]);
+                toggle_button.setRolloverIcon(no_eye_icons[2]);
+            }
+
+            clear_text = !clear_text;
+        };
+
+        private KeyListener enter_list = new KeyListener() {
+            @Override
+            public void keyReleased(KeyEvent e) {
+                if (e.getKeyCode() == 10) { //10 -> enter
+                    setText(getText().replaceAll("\n", "")); //rimuove la nuova linea
+
+                    try {
+                        input_array.elementAt(INDEX + 1).grabFocus(); //passa il focus all'input successivo
+                    } catch (Exception ex) { //se non esiste un input con index > di questo
+                        ok_button.doClick(); //simula il tasto "ok"
+                    }
+                }
+                else if (e.getKeyCode() == 27) { //27 -> esc
+                    annulla_button.doClick();
+                }
+            }
+            @Override
+            public void keyTyped(KeyEvent e) {}
+
+            @Override
+            public void keyPressed(KeyEvent e) {}
+        };
     }
-
-    public Triple() {}
-
 }

@@ -3,6 +3,8 @@ package file_database;
 import gui.CentralTerminal_panel;
 import gui.StringVectorOperator;
 import gui.TempPanel;
+import gui.TempPanel_info;
+
 import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -24,7 +26,7 @@ public class File_cipher {
         if (is_empty(Database.FileCypherKey_test)) { //se non è stata impostata una password
             throw new RuntimeException("non è specificata una password per cifrare i file");
         } else {
-            TempPanel.request_string("inserisci la chiave per i database: ", AES_init); //chiede la password
+            TempPanel.show(new TempPanel_info("inserisci la chiave per i database: ").set_psw_indices(0), AES_init); //chiede la password
         }
     }
 
@@ -60,7 +62,7 @@ public class File_cipher {
         @Override
         public void fail() {
             if (Database.DEBUG) { CentralTerminal_panel.terminal_write("la password inserita non è corretta, o è stato premuto cancella\n", true); }
-            TempPanel.show_msg("password non corretta, riprovare", error_init, false);
+            TempPanel.show(new TempPanel_info("password non corretta, riprovare", false), error_init);
         }
     };
 
@@ -87,7 +89,7 @@ public class File_cipher {
     private static StringVectorOperator error_init = new StringVectorOperator() {
         @Override
         public void success() {
-            TempPanel.request_string("inserisci la chiave per i database: ", AES_init); //richiede la password
+            TempPanel.show(new TempPanel_info("inserisci la chiave per i database: ").set_psw_indices(0), AES_init); //richiede la password
         }
 
         @Override

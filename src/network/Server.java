@@ -73,7 +73,7 @@ public abstract class Server {
                     secure_with_aes(pubKey_cipher);
                 } else { //se è stato trovato un errore nel verificare il certificato
                     CentralTerminal_panel.terminal_write("certificato non valido!", true);
-                    TempPanel.show_msg("il certificato ricevuto dal server non è valido, chiudo la connessione");
+                    TempPanel.show(new TempPanel_info("il certificato ricevuto dal server non è valido, chiudo la connessione", false), null);
 
                     Connection.close();
 
@@ -83,20 +83,20 @@ public abstract class Server {
                 return 0;
             } catch (UnknownHostException e) {
                 CentralTerminal_panel.terminal_write("è stato inserito un indirizzo ip non valido\n", true);
-                TempPanel.show_msg("l'indirizzo ip è stato inserito male, non ha senso");
+                TempPanel.show(new TempPanel_info("l'indirizzo ip è stato inserito male, non ha senso", false), null);
                 return E_INVIP;
             } catch (ConnectException e) {
                 if (dns_alive) { //se la connessione è stata rifiutata dal server
                     CentralTerminal_panel.terminal_write("il server a cui si è cercato di connettersi non è raggiungibile\n", true);
-                    TempPanel.show_msg("connessione rifiutata, il server non è raggiungibile");
+                    TempPanel.show(new TempPanel_info("connessione rifiutata, il server non è raggiungibile", false), null);
                 } else { //se la connessione è stata rifiutata dal DNS
                     CentralTerminal_panel.terminal_write("il server DNS non è raggiungibile\n", true);
-                    TempPanel.show_msg("errore nella configurazione del DNS, server non raggiungibile");
+                    TempPanel.show(new TempPanel_info("errore nella configurazione del DNS, server non raggiungibile", false), null);
                 }
                 return E_CONR;
             } catch (IOException e) {
                 CentralTerminal_panel.terminal_write("connessione interrotta inaspettatamente\n", true);
-                TempPanel.show_msg("impossibile connettersi al server");
+                TempPanel.show(new TempPanel_info("impossibile connettersi al server", false), null);
                 return E_GEN;
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -104,7 +104,7 @@ public abstract class Server {
         }
         else {
             CentralTerminal_panel.terminal_write("già connesso ad un server!\n", true);
-            TempPanel.show_msg("già connessi ad un server!");
+            TempPanel.show(new TempPanel_info("già connessi ad un server!", false), null);
 
             return E_GEN;
         }
@@ -233,24 +233,20 @@ public abstract class Server {
 
     private static void login_register() {
         if (Database.DEBUG) { CentralTerminal_panel.terminal_write("chiedo se vuole fare il login: action = " + login_or_register + "\n", false); }
-        TempPanel.show_msg("se vuoi fare il login premi \"ok\", altrimenti cancella", login_or_register, true);
+        TempPanel.show(new TempPanel_info("se vuoi fare il login premi \"ok\", altrimenti cancella", true), login_or_register);
     }
 
     private static StringVectorOperator login_or_register = new StringVectorOperator() {
         @Override
         public void success() { //se vuole fare il login
-            Vector<String> requests = new Vector<>();
-            requests.add("inserisci nome utente: ");
-            requests.add("inserisci password: ");
-
             if (Database.DEBUG) { CentralTerminal_panel.terminal_write("chiedo nome utente e password per il login: action = " + login + "\n", false); }
-            TempPanel.request_string(requests, login); //richiede nome utente e password
+            TempPanel.show(new TempPanel_info("inserisci nome utente: ", "inserisci password: ").set_psw_indices(1), login);
         }
 
         @Override
         public void fail() { //se vuole registrarsi o se vuole uscire
             if (Database.DEBUG) { CentralTerminal_panel.terminal_write("chiedo se vuole registrarsi: action = " + login_or_register + "\n", false); }
-            TempPanel.show_msg("se vuoi registrarti premi \"ok\", altrimenti \"cancella\" e verrai disconnesso", register_exit, true);
+            TempPanel.show(new TempPanel_info("se vuoi registrarti premi \"ok\", altrimenti \"cancella\" e verrai disconnesso", true), register_exit);
         }
     };
 
@@ -287,25 +283,21 @@ public abstract class Server {
             else { //se nome utente o password sono sbagliati
                 if (Database.DEBUG) { CentralTerminal_panel.terminal_write("password o nome utente sbagliati\n", true); }
 
-                TempPanel.show_msg("nome utente o password errati, premere \"ok\" per ritentare", login_or_register, true);
+                TempPanel.show(new TempPanel_info("nome utente o password errati, premere \"ok\" per ritentare", true), login_or_register);
             }
         };
 
         @Override
         public void fail() { //è stato premuto "cancella" viene chiesto nuovamente se vuole fare il login o se vuole registrarsi/scollegarsi
             if (Database.DEBUG) { CentralTerminal_panel.terminal_write("chiedo se vuole fare il login: action = " + login_or_register+ "\n", false); }
-            TempPanel.show_msg("se vuoi fare il login premi \"ok\", altrimenti cancella", login_or_register, true);
+            TempPanel.show(new TempPanel_info("se vuoi fare il login premi \"ok\", altrimenti cancella", true), login_or_register);
         }
     };
 
     private static StringVectorOperator register_exit = new StringVectorOperator() {
         @Override
         public void success() { //vuole registrarsi
-            Vector<String> requests = new Vector<>();
-            requests.add("inserisci nome utente: ");
-            requests.add("inserisci password: ");
-
-            TempPanel.request_string(requests, register); //richiede nome utente e password
+            TempPanel.show(new TempPanel_info("inserisci nome utente: ", "inserisci password: ").set_psw_indices(1), register);
         }
 
         @Override
@@ -343,13 +335,13 @@ public abstract class Server {
                 ClientList_panel.setEnabled(true);
             }
             else { //se nome utente o password sono sbagliati
-                TempPanel.show_msg("nome utente o password errati, premere \"ok\" per ritentare", login_or_register, true);
+                TempPanel.show(new TempPanel_info("nome utente o password errati, premere \"ok\" per ritentare", true), login_or_register);
             }
         };
 
         @Override
         public void fail() { //se viene premuto cancella, chiede nuovamente se vuole fare il login o registrarsi/scollegarsi
-            TempPanel.show_msg("se vuoi fare il login premi \"ok\", altrimenti cancella", login_or_register, true);
+            TempPanel.show(new TempPanel_info("se vuoi fare il login premi \"ok\", altrimenti cancella", true), login_or_register);
         }
     };
 

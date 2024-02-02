@@ -95,11 +95,11 @@ public abstract class ClientList_panel extends Database {
             if (msg[0] == 1) { //appaiamento accettato
                 Connection.pair(clients_list.getSelectedValue());
                 CentralTerminal_panel.terminal_write("collegamento con " + clients_list.getSelectedValue() + " instaurato con successo!\n", false);
-                TempPanel.show_msg("collegamento con " + clients_list.getSelectedValue() + " instaurato con successo!");
+                TempPanel.show(new TempPanel_info("collegamento con " + clients_list.getSelectedValue() + " instaurato con successo!", false), null);
             }
             else { //appaiamento rifiutato
                 CentralTerminal_panel.terminal_write("collegamento con " + clients_list.getSelectedValue() + " rifiutato\n", false);
-                TempPanel.show_msg("collegamento con " + clients_list.getSelectedValue() + " rifiutato");
+                TempPanel.show(new TempPanel_info("collegamento con " + clients_list.getSelectedValue() + " rifiutato", false), null);
             }
         };
 
@@ -108,11 +108,11 @@ public abstract class ClientList_panel extends Database {
             Connection.write(("pair:" + pair_usr).getBytes(), pair_resp);
         }
         else if (Connection.is_paired()) {
-            TempPanel.show_msg("impossibile collegarsi a più client");
+            TempPanel.show(new TempPanel_info("impossibile collegarsi a più client", false), null);
             if (Database.DEBUG) { CentralTerminal_panel.terminal_write("tentativo di collegarsi ad un client mentre si è già collegati a: " + Connection.get_paired_usr() + "\n", true); }
         }
         else if (pair_usr.equals("")) {
-            TempPanel.show_msg("selezionale il client a cui collegarsi");
+            TempPanel.show(new TempPanel_info("selezionale il client a cui collegarsi", false), null);
             if (Database.DEBUG) { CentralTerminal_panel.terminal_write("tentativo di collegarsi ad un client senza aver selezionato nulla dalla lista\n", true); }
         }
     };

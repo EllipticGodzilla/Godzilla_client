@@ -141,15 +141,9 @@ public abstract class ServerList_panel extends Database {
     }
 
     private static ActionListener add_server_listener = new ActionListener() {
-        Vector<String> requests = new Vector<>();
         @Override
         public void actionPerformed(ActionEvent e) {
-            if (requests.size() == 0) {
-                requests.add("inserisci il link al server: ");
-                requests.add("inserisci il nome del server: ");
-            }
-
-            TempPanel.request_string(requests, name_and_ip);
+            TempPanel.show(new TempPanel_info("inserisci il link al server: ", "inserisci il nome del server: "), name_and_ip);
         }
 
         private StringVectorOperator name_and_ip = new StringVectorOperator() {
@@ -160,13 +154,9 @@ public abstract class ServerList_panel extends Database {
                         Database.serverList.put(input.elementAt(1), input.elementAt(0)); //aggiunge indirizzo e nome alla mappa serverList
                         server_list.add(input.elementAt(1)); //aggiunge il nome del server alla JList rendendolo visibile
                     } else {
-                        TempPanel.show_msg("il nome o indirizzo inseriti non sono validi, inserire nome ed indirizzo validi", error_name_ip, false);
+                        TempPanel.show(new TempPanel_info("il nome o indirizzo inseriti non sono validi, inserire nome ed indirizzo validi", false), error_name_ip);
                     }
-                } catch (InvocationTargetException e) {
-                    throw new RuntimeException(e);
-                } catch (InstantiationException e) {
-                    throw new RuntimeException(e);
-                } catch (IllegalAccessException e) {
+                } catch (InvocationTargetException | InstantiationException | IllegalAccessException e) {
                     throw new RuntimeException(e);
                 }
             }
@@ -178,7 +168,8 @@ public abstract class ServerList_panel extends Database {
         private StringVectorOperator error_name_ip = new StringVectorOperator() {
             @Override
             public void success() {
-                TempPanel.request_string(requests, name_and_ip);
+
+                TempPanel.show(new TempPanel_info("inserisci il link al server: ", "inserisci il nome del server: "), name_and_ip);
             }
 
             @Override
@@ -248,7 +239,7 @@ public abstract class ServerList_panel extends Database {
 
                     cell_name = input.elementAt(0); //modifica il nome per questo popup
                 } else {
-                    TempPanel.show_msg("inserisci un nome valido ed unico fra tutti i server", rename_fail, false);
+                    TempPanel.show(new TempPanel_info("inserisci un nome valido ed unico fra tutti i server", false), rename_fail);
                 }
             }
 
@@ -259,7 +250,7 @@ public abstract class ServerList_panel extends Database {
         private StringVectorOperator rename_fail = new StringVectorOperator() {
             @Override
             public void success() {
-                TempPanel.request_string("inserisci il nuovo nome per il server: " + cell_name, rename_action);
+                TempPanel.show(new TempPanel_info("inserisci il nuovo nome per il server: " + cell_name), rename_action);
             }
 
             @Override
@@ -267,7 +258,7 @@ public abstract class ServerList_panel extends Database {
         };
 
         private ActionListener rename_listener = (e) -> {
-            TempPanel.request_string("inserisci il nuovo nome per il server: " + cell_name, rename_action);
+            TempPanel.show(new TempPanel_info("inserisci il nuovo nome per il server: " + cell_name), rename_action);
         };
 
         private StringVectorOperator remove_confirm = new StringVectorOperator() {
@@ -284,7 +275,7 @@ public abstract class ServerList_panel extends Database {
         };
 
         private ActionListener remove_listener = (e) -> {
-            TempPanel.show_msg("il server \"" + cell_name + "\" verrà rimosso", remove_confirm, true);
+            TempPanel.show(new TempPanel_info("il server \"" + cell_name + "\" verrà rimosso", true), remove_confirm);
         };
 
     }

@@ -373,7 +373,7 @@ abstract class Receiver {
                     CentralTerminal_panel.terminal_write("l'utente " + pairing_usr + " ha chiesto di collegarsi\n", false);
                     
                     pair_act.conv_code = conv_code;
-                    TempPanel.show_msg("l'utente " + pairing_usr + " ha chiesto di collegarsi", pair_act, true);
+                    TempPanel.show(new TempPanel_info("l'utente " + pairing_usr + " ha chiesto di collegarsi", true), pair_act);
                 }
                 else { //se è già appaiato con un client
                     if (Database.DEBUG) {
