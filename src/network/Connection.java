@@ -2,7 +2,6 @@ package network;
 
 import file_database.Database;
 import gui.*;
-
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import java.io.BufferedInputStream;

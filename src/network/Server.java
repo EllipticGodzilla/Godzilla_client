@@ -12,7 +12,6 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.Vector;
 import java.util.regex.Pattern;
 
 public abstract class Server {
@@ -246,7 +245,7 @@ public abstract class Server {
         @Override
         public void fail() { //se vuole registrarsi o se vuole uscire
             if (Database.DEBUG) { CentralTerminal_panel.terminal_write("chiedo se vuole registrarsi: action = " + login_or_register + "\n", false); }
-            TempPanel.show(new TempPanel_info("se vuoi registrarti premi \"ok\", altrimenti \"cancella\" e verrai disconnesso", true), register_exit);
+            TempPanel.show(new TempPanel_info("se vuoi registrarti premi \"ok\", altrimenti \"cancella\" e verrai disconnesso", true), register_or_exit);
         }
     };
 
@@ -294,7 +293,7 @@ public abstract class Server {
         }
     };
 
-    private static StringVectorOperator register_exit = new StringVectorOperator() {
+    private static StringVectorOperator register_or_exit = new StringVectorOperator() {
         @Override
         public void success() { //vuole registrarsi
             TempPanel.show(new TempPanel_info("inserisci nome utente: ", "inserisci password: ").set_psw_indices(1), register);
@@ -335,7 +334,7 @@ public abstract class Server {
                 ClientList_panel.setEnabled(true);
             }
             else { //se nome utente o password sono sbagliati
-                TempPanel.show(new TempPanel_info("nome utente o password errati, premere \"ok\" per ritentare", true), login_or_register);
+                TempPanel.show(new TempPanel_info("esiste già un utente con questo nome, scegline uno nuovo", true), register_or_exit);
             }
         };
 
@@ -346,7 +345,7 @@ public abstract class Server {
     };
 
     private static byte[] psw_array(byte[] usr, byte[] psw) throws NoSuchAlgorithmException { //ritorna sha3-256(<psw>+0xff..ff^<usr>)
-        byte[] usr_inverse = new byte[psw.length];
+        byte[] usr_inverse = new byte[usr.length];
 
         for (int i = 0; i < usr.length; i++) {
             usr_inverse[i] = (byte) (usr[i] ^ 0xff);

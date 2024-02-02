@@ -133,7 +133,7 @@ abstract public class TempPanel {
             //distingue nei vari tipi di finestra
             if (info.request_input()) //se richiede degli input
             {
-                request_input(info.get_requests(), info.get_psw_info());
+                request_input(info.get_requests(), info.get_psw_info(), info.request_psw());
             }
             else //se mostra solamente un messaggio
             {
@@ -166,7 +166,7 @@ abstract public class TempPanel {
         ok_button.requestFocus(); //richiede il focus, in modo che se premuto invio appena il popup compare equivale a premere "ok"
     }
 
-    private static void request_input(String[] requests, boolean[] psw_indices)
+    private static void request_input(String[] requests, boolean[] psw_indices, boolean request_psw)
     {
         int max_width = 0; //contiene la lunghezza della JTextArea che contiene il messaggio più lungo
 
@@ -200,7 +200,7 @@ abstract public class TempPanel {
                 c.insets.right = 3;
                 txt_panel.add(input_field, c);
 
-                c.gridx = 3;
+                c.gridx = 2;
                 c.insets.right = 10;
                 txt_panel.add(((PasswordField) input_field).get_toggle_button(), c);
             }
@@ -211,7 +211,10 @@ abstract public class TempPanel {
                 //aggiunge al pannello input_field
                 c.weightx = 0;
                 c.gridx = 1;
+                c.gridwidth = (request_psw)? 2 : 1; //se richiede delle password i campi di inserimento normali si estendono anche nella colonna del pulsante per mostrare il testo delle password
                 txt_panel.add(input_field, c);
+
+                c.gridwidth = 1; //resetta gridwidth
             }
 
             input_array.add(input_field); //aggiunge gli input_field in un vettore per poi ricavarne i testi inseriti
